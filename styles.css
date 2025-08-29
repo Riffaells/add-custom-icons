@@ -1,8 +1,198 @@
-/*
+/* Add Custom Icons Plugin Styles */
 
-This CSS file will be included with your plugin, and
-available in the app when your plugin is enabled.
+/* Plugin list items */
+.plugin-list-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    margin: 4px 0;
+    border-radius: 6px;
+    border: 1px solid var(--background-modifier-border);
+}
 
-If your plugin does not need CSS, delete this file.
+.plugin-list-item:hover {
+    background: var(--background-modifier-hover);
+}
 
-*/
+.plugin-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.plugin-name {
+    font-weight: 500;
+    color: var(--text-normal);
+    margin-bottom: 2px;
+}
+
+.plugin-id {
+    font-size: 0.85em;
+    color: var(--text-muted);
+    font-family: var(--font-monospace);
+}
+
+.plugin-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+
+
+.no-plugins-message {
+    text-align: center;
+    padding: 20px;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+/* Settings sections */
+.settings-section {
+    margin: 24px 0;
+    padding: 0;
+}
+
+.settings-section h3 {
+    margin: 0 0 16px 0;
+    color: var(--text-normal);
+    font-size: 1.1em;
+    font-weight: 600;
+    border-bottom: 1px solid var(--background-modifier-border);
+    padding-bottom: 8px;
+}
+
+/* Icon management buttons */
+.icon-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.icon-button {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: var(--interactive-normal);
+    color: var(--text-on-accent);
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9em;
+    transition: background-color 0.2s;
+}
+
+.icon-button:hover {
+    background: var(--interactive-hover);
+}
+
+.icon-button svg {
+    width: 16px;
+    height: 16px;
+}
+
+/* Selected plugins display */
+.selected-plugins-compact {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 8px 0;
+}
+
+.plugin-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 8px;
+    color: var(--text-muted);
+    border-radius: 12px;
+    font-size: 0.85em;
+    border: 1px solid var(--background-modifier-border);
+    position: relative;
+}
+
+.plugin-tag-remove {
+    margin-left: 6px;
+    cursor: pointer;
+    color: var(--text-error);
+    font-weight: bold;
+    font-size: 1.1em;
+    line-height: 1;
+    padding: 0 2px;
+    border-radius: 50%;
+    transition: background-color 0.2s;
+}
+
+.plugin-tag-remove:hover {
+    background-color: var(--background-modifier-error);
+    color: var(--text-on-accent);
+}
+
+.no-plugins-selected {
+    margin: 8px 0;
+    font-style: italic;
+}
+
+/* Modal styles */
+.plugin-selection-modal .modal-header {
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--background-modifier-border);
+}
+
+.plugin-selection-modal .modal-header h2 {
+    margin: 0;
+    color: var(--text-normal);
+    font-size: 1.3em;
+}
+
+.modal-plugin-list {
+    max-height: 400px;
+    overflow-y: auto;
+    margin: 16px 0;
+}
+
+.modal-plugin-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--background-modifier-border);
+    transition: opacity 0.2s;
+}
+
+.modal-plugin-item:last-child {
+    border-bottom: none;
+}
+
+.modal-plugin-item.plugin-disabled {
+    opacity: 0.5;
+}
+
+.modal-plugin-item.plugin-disabled:hover {
+    opacity: 0.7;
+}
+
+.modal-plugin-info {
+    flex: 1;
+}
+
+.modal-plugin-name {
+    font-weight: 500;
+    margin-bottom: 2px;
+}
+
+.modal-plugin-id {
+    font-size: 0.85em;
+    color: var(--text-muted);
+    font-family: var(--font-monospace);
+}
+
+.modal-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--background-modifier-border);
+}

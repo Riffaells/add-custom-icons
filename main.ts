@@ -1,134 +1,176 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import { Plugin, Notice } from 'obsidian';
+import { AddCustomIconsSettings, IconCache } from './src/types';
+import { DEFAULT_SETTINGS, CONFIG } from './src/utils/constants';
+import { IconLoader } from './src/services/IconLoader';
+import { PluginManager } from './src/services/PluginManager';
+import { I18nService } from './src/services/I18nService';
+import { AddCustomIconsSettingTab } from './src/ui/SettingsTab';
 
-// Remember to rename these classes and interfaces!
+export default class AddCustomIconsPlugin extends Plugin {
+	settings: AddCustomIconsSettings = DEFAULT_SETTINGS;
+	iconCache: IconCache = { _cacheVersion: CONFIG.CACHE_VERSION };
+	iconLoader: IconLoader;
+	pluginManager: PluginManager;
+	i18n: I18nService;
+	isLoading = false;
+	loadedIconsCount = 0;
 
-interface MyPluginSettings {
-	mySetting: string;
-}
+	async onload(): Promise<void> {
+		console.log('Loading Add Custom Icons plugin');
 
-const DEFAULT_SETTINGS: MyPluginSettings = {
-	mySetting: 'default'
-}
+		try {
+			await this.loadSettings();
+			this.initializeServices();
+			await this.i18n.loadLanguage();
+			await this.initializeIconCache();
+			this.registerCommands();
+			this.addSettingTab(new AddCustomIconsSettingTab(this.app, this));
+			this.scheduleBackgroundIconLoad();
+		} catch (error) {
+			console.error('Failed to load Add Custom Icons plugin:', error);
+		}
+	}
 
-export default class MyPlugin extends Plugin {
-	settings: MyPluginSettings;
+	private debugLog(...args: any[]): void {
+		if (this.settings.debugMode) {
+			console.log('[AddCustomIcons]', ...args);
+		}
+	}
 
-	async onload() {
-		await this.loadSettings();
+	onunload(): void {
+		console.log('Unloading Add Custom Icons plugin');
+	}
 
-		// This creates an icon in the left ribbon.
-		const ribbonIconEl = this.addRibbonIcon('dice', 'Sample Plugin', (evt: MouseEvent) => {
-			// Called when the user clicks the icon.
-			new Notice('This is a notice!');
-		});
-		// Perform additional things with the ribbon
-		ribbonIconEl.addClass('my-plugin-ribbon-class');
+	private initializeServices(): void {
+		this.iconLoader = new IconLoader(this.app, this.manifest.dir || '');
+		this.pluginManager = new PluginManager(this.app, this.manifest.id);
+		this.i18n = new I18nService(this.app, this.manifest.dir || '');
+		this.updateDebugMode();
+	}
 
-		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
-		const statusBarItemEl = this.addStatusBarItem();
-		statusBarItemEl.setText('Status Bar Text');
+	private updateDebugMode(): void {
+		this.iconLoader.setDebugMode(this.settings.debugMode);
+	}
 
-		// This adds a simple command that can be triggered anywhere
+	private async initializeIconCache(): Promise<void> {
+		if (this.iconCache._cacheVersion === CONFIG.CACHE_VERSION) {
+			this.debugLog(`Loaded icon cache with ${Object.keys(this.iconCache).length - 1} entries`);
+			this.iconLoader.restoreIconsFromCache(this.iconCache);
+		} else {
+			this.debugLog('Cache version mismatch or no cache found, will create new cache');
+			this.iconCache = { _cacheVersion: CONFIG.CACHE_VERSION };
+		}
+	}
+
+	private registerCommands(): void {
 		this.addCommand({
-			id: 'open-sample-modal-simple',
-			name: 'Open sample modal (simple)',
-			callback: () => {
-				new SampleModal(this.app).open();
+			id: 'reload-custom-icons',
+			name: this.i18n.t('commands.reloadIcons'),
+			callback: () => this.reloadIcons()
+		});
+	}
+
+	private scheduleBackgroundIconLoad(): void {
+		setTimeout(() => {
+			this.loadIconsInBackground();
+		}, CONFIG.BACKGROUND_LOAD_DELAY);
+	}
+
+	async loadSettings(): Promise<void> {
+		const data = await this.loadData();
+
+		if (data && data._cacheVersion) {
+			const { enableAutoRestart, restartTarget, selectedPlugins, debugMode, ...cacheData } = data;
+			this.settings = Object.assign({}, DEFAULT_SETTINGS, {
+				enableAutoRestart,
+				restartTarget,
+				selectedPlugins,
+				debugMode
+			});
+			this.iconCache = cacheData as IconCache;
+		} else {
+			this.settings = Object.assign({}, DEFAULT_SETTINGS, data || {});
+		}
+	}
+
+	async saveSettings(): Promise<void> {
+		const dataToSave = Object.assign({}, this.iconCache, this.settings);
+		await this.saveData(dataToSave);
+		this.updateDebugMode();
+	}
+
+	private async loadIconsInBackground(): Promise<void> {
+		if (this.isLoading) {
+			this.debugLog('Icon loading already in progress');
+			return;
+		}
+
+		this.isLoading = true;
+
+		try {
+			const result = await this.iconLoader.loadIcons(this.iconCache);
+			this.iconCache = result.newCache;
+			this.loadedIconsCount = result.loadedCount;
+
+			if (result.changedCount > 0) {
+				await this.saveSettings();
 			}
-		});
-		// This adds an editor command that can perform some operation on the current editor instance
-		this.addCommand({
-			id: 'sample-editor-command',
-			name: 'Sample editor command',
-			editorCallback: (editor: Editor, view: MarkdownView) => {
-				console.log(editor.getSelection());
-				editor.replaceSelection('Sample Editor Command');
+
+			this.triggerRestart();
+		} catch (error) {
+			console.error('Error loading icons in background:', error);
+		} finally {
+			this.isLoading = false;
+		}
+	}
+
+	async reloadIcons(): Promise<void> {
+		if (this.isLoading) {
+			new Notice(this.i18n.t('notices.loadingInProgress'));
+			return;
+		}
+
+		new Notice(this.i18n.t('notices.startingReload'));
+
+		try {
+			this.isLoading = true;
+			const result = await this.iconLoader.loadIcons(this.iconCache);
+			this.iconCache = result.newCache;
+			this.loadedIconsCount = result.loadedCount;
+
+			if (result.changedCount > 0) {
+				await this.saveSettings();
 			}
-		});
-		// This adds a complex command that can check whether the current state of the app allows execution of the command
-		this.addCommand({
-			id: 'open-sample-modal-complex',
-			name: 'Open sample modal (complex)',
-			checkCallback: (checking: boolean) => {
-				// Conditions to check
-				const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
-				if (markdownView) {
-					// If checking is true, we're simply "checking" if the command can be run.
-					// If checking is false, then we want to actually perform the operation.
-					if (!checking) {
-						new SampleModal(this.app).open();
-					}
 
-					// This command will only show up in Command Palette when the check function returns true
-					return true;
-				}
-			}
-		});
-
-		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new SampleSettingTab(this.app, this));
-
-		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
-		// Using this function will automatically remove the event listener when this plugin is disabled.
-		this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
-			console.log('click', evt);
-		});
-
-		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-		this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
+			new Notice(this.i18n.t('notices.iconsLoadedWithChanges', {
+				count: result.loadedCount,
+				changed: result.changedCount
+			}));
+			this.triggerRestart();
+		} catch (error) {
+			console.error('Error reloading icons:', error);
+			new Notice(this.i18n.t('notices.errorReloading'));
+		} finally {
+			this.isLoading = false;
+		}
 	}
 
-	onunload() {
+	private triggerRestart(): void {
+		if (!this.settings.enableAutoRestart) {
+			this.debugLog('Auto restart is disabled');
+			return;
+		}
 
-	}
-
-	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
-	}
-
-	async saveSettings() {
-		await this.saveData(this.settings);
-	}
-}
-
-class SampleModal extends Modal {
-	constructor(app: App) {
-		super(app);
-	}
-
-	onOpen() {
-		const {contentEl} = this;
-		contentEl.setText('Woah!');
-	}
-
-	onClose() {
-		const {contentEl} = this;
-		contentEl.empty();
-	}
-}
-
-class SampleSettingTab extends PluginSettingTab {
-	plugin: MyPlugin;
-
-	constructor(app: App, plugin: MyPlugin) {
-		super(app, plugin);
-		this.plugin = plugin;
-	}
-
-	display(): void {
-		const {containerEl} = this;
-
-		containerEl.empty();
-
-		new Setting(containerEl)
-			.setName('Setting #1')
-			.setDesc('It\'s a secret')
-			.addText(text => text
-				.setPlaceholder('Enter your secret')
-				.setValue(this.plugin.settings.mySetting)
-				.onChange(async (value) => {
-					this.plugin.settings.mySetting = value;
-					await this.plugin.saveSettings();
-				}));
+		switch (this.settings.restartTarget) {
+			case 'plugins':
+				this.pluginManager.triggerPluginsReload(this.settings.selectedPlugins);
+				break;
+			case 'obsidian':
+				this.pluginManager.triggerObsidianRestart();
+				break;
+			case 'none':
+				this.debugLog('No restart target selected');
+				break;
+		}
 	}
 }
