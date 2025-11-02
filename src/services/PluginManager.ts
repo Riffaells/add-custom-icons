@@ -15,7 +15,7 @@ interface ObsidianApp extends App {
 
 export class PluginManager {
 	private app: ObsidianApp;
-	private manifestId: string;
+	private readonly manifestId: string;
 
 	constructor(app: App, manifestId: string) {
 		this.app = app as ObsidianApp;

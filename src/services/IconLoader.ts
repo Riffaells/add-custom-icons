@@ -1,12 +1,13 @@
-import { App, addIcon } from 'obsidian';
-import { IconFile, IconCache, IconCacheEntry, ProcessIconResult } from '../types';
-import { CONFIG } from '../utils/constants';
-import { HelperUtils } from '../utils/helpers';
+import {App, addIcon} from 'obsidian';
+import {IconFile, IconCache, IconCacheEntry, ProcessIconResult} from '../types';
+import {CONFIG} from '../utils/constants';
+import {HelperUtils} from '../utils/helpers';
 
 export class IconLoader {
 	private app: App;
-	private manifestDir: string;
+	private readonly manifestDir: string;
 	private debugMode: boolean = false;
+	private _oldCache: IconCache;
 
 	constructor(app: App, manifestDir: string) {
 		this.app = app;
@@ -29,7 +30,7 @@ export class IconLoader {
 		newCache: IconCache
 	}> {
 		const iconsFolderPath = this.getIconsFolderPath();
-try {
+		try {
 			this.debugLog('Scanning for icons...');
 			const iconFiles = await this.listIconsRecursive(iconsFolderPath, '');
 			const svgFiles = this.filterSvgFiles(iconFiles);
@@ -38,11 +39,11 @@ try {
 
 			if (svgFiles.length === 0) {
 				this.debugLog('No SVG icons found.');
-				return { loadedCount: 0, changedCount: 0, newCache: iconCache };
+				return {loadedCount: 0, changedCount: 0, newCache: iconCache};
 			}
 
 			const results = await this.processIconsInBatches(svgFiles, iconCache);
-			const { newCache, changedCount } = this.updateIconCache(results, iconCache);
+			const {newCache, changedCount} = this.updateIconCache(results, iconCache);
 
 			return {
 				loadedCount: svgFiles.length,
@@ -100,7 +101,8 @@ try {
 		newCache: IconCache;
 		changedCount: number
 	} {
-		const newIconCache: IconCache = { _cacheVersion: CONFIG.CACHE_VERSION };
+		this._oldCache = oldCache;
+		const newIconCache: IconCache = {_cacheVersion: CONFIG.CACHE_VERSION};
 		let changedCount = 0;
 
 		for (const result of results) {
@@ -112,7 +114,7 @@ try {
 			}
 		}
 
-		return { newCache: newIconCache, changedCount };
+		return {newCache: newIconCache, changedCount};
 	}
 
 	private handleLoadIconsError(error: Error, iconsFolderPath: string): void {
@@ -147,10 +149,10 @@ try {
 				};
 			}
 
-			return { success: false };
+			return {success: false};
 		} catch (error) {
 			this.debugLog(`Error processing SVG icon ${icon.path}:`, error);
-			return { success: false };
+			return {success: false};
 		}
 	}
 
@@ -175,7 +177,7 @@ try {
 			};
 		}
 
-		return { useCache: false, fileStat };
+		return {useCache: false, fileStat};
 	}
 
 	private async processNewIcon(icon: IconFile, fileStat: any): Promise<{

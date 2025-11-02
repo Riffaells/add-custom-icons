@@ -13,7 +13,7 @@ export const CONFIG = {
 export const DEFAULT_SETTINGS: AddCustomIconsSettings = {
 	restartTarget: 'plugins',
 	enableAutoRestart: true,
-	selectedPlugins: ['obsidian-icon-folder'],
+	selectedPlugins: ['Iconic'],
 	debugMode: false
 };
 

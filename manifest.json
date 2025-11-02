@@ -1,7 +1,7 @@
 {
     "id": "add-custom-icons",
     "name": "Add Custom Icons",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "minAppVersion": "0.15.0",
     "description": "Load custom SVG icons from icons folder and restart plugins automatically",
     "author": "Riffaells",

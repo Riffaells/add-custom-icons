@@ -1,68 +1,57 @@
-/* Add Custom Icons Plugin Styles */
-
-/* Plugin list items */
-.plugin-list-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 8px 12px;
-    margin: 4px 0;
-    border-radius: 6px;
-    border: 1px solid var(--background-modifier-border);
+/* Общие стили для страницы настроек */
+.settings-tab-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 24px;
+    padding: 16px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 }
 
-.plugin-list-item:hover {
-    background: var(--background-modifier-hover);
-}
-
-.plugin-info {
-    flex: 1;
-    min-width: 0;
-}
-
-.plugin-name {
-    font-weight: 500;
-    color: var(--text-normal);
-    margin-bottom: 2px;
-}
-
-.plugin-id {
-    font-size: 0.85em;
-    color: var(--text-muted);
-    font-family: var(--font-monospace);
-}
-
-.plugin-actions {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-
-
-.no-plugins-message {
-    text-align: center;
+/* Стили для карточек секций */
+.settings-section-card {
+    background-color: var(--background-secondary);
+    border-radius: 12px;
     padding: 20px;
-    color: var(--text-muted);
-    font-style: italic;
+    border: 1px solid var(--background-modifier-border);
+    transition: all 0.2s ease-in-out;
+    display: flex;
+    flex-direction: column;
 }
 
-/* Settings sections */
-.settings-section {
-    margin: 24px 0;
-    padding: 0;
+.settings-section-card:hover {
+    border-color: var(--interactive-accent-hover);
 }
 
-.settings-section h3 {
-    margin: 0 0 16px 0;
-    color: var(--text-normal);
-    font-size: 1.1em;
-    font-weight: 600;
+.settings-section-card .setting-item {
+    padding: 12px 0;
     border-bottom: 1px solid var(--background-modifier-border);
-    padding-bottom: 8px;
 }
 
-/* Icon management buttons */
+.settings-section-card .setting-item:last-child {
+    border-bottom: none;
+}
+
+/* Заголовок секции */
+.settings-section-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.settings-section-header .section-icon {
+    font-size: 22px;
+    color: var(--text-muted);
+}
+
+.settings-section-header h3 {
+    margin: 0;
+    font-size: 1.2em;
+    font-weight: 600;
+    color: var(--text-normal);
+}
+
+/* Кнопки и элементы управления */
 .icon-actions {
     display: flex;
     gap: 12px;
@@ -72,127 +61,107 @@
 .icon-button {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 8px 12px;
-    background: var(--interactive-normal);
+    gap: 8px;
+    padding: 10px 14px;
+    background-color: var(--interactive-normal);
     color: var(--text-on-accent);
     border: none;
-    border-radius: 6px;
+    border-radius: 8px;
     cursor: pointer;
-    font-size: 0.9em;
+    font-size: 0.95em;
+    font-weight: 500;
     transition: background-color 0.2s;
 }
 
 .icon-button:hover {
-    background: var(--interactive-hover);
+    background-color: var(--interactive-hover);
 }
 
 .icon-button svg {
-    width: 16px;
-    height: 16px;
+    width: 18px;
+    height: 18px;
 }
 
-/* Selected plugins display */
+/* Список выбранных плагинов */
 .selected-plugins-compact {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
-    margin: 8px 0;
+    gap: 8px;
+    margin: 12px 0;
 }
 
 .plugin-tag {
     display: inline-flex;
     align-items: center;
-    padding: 4px 8px;
-    color: var(--text-muted);
-    border-radius: 12px;
-    font-size: 0.85em;
+    padding: 6px 10px;
+    background-color: var(--background-primary);
     border: 1px solid var(--background-modifier-border);
-    position: relative;
+    border-radius: 16px;
+    font-size: 0.9em;
+    color: var(--text-muted);
 }
 
 .plugin-tag-remove {
-    margin-left: 6px;
+    margin-left: 8px;
     cursor: pointer;
-    color: var(--text-error);
+    color: var(--text-muted);
     font-weight: bold;
-    font-size: 1.1em;
-    line-height: 1;
-    padding: 0 2px;
-    border-radius: 50%;
-    transition: background-color 0.2s;
+    font-size: 1.2em;
+    transition: color 0.2s;
 }
 
 .plugin-tag-remove:hover {
-    background-color: var(--background-modifier-error);
-    color: var(--text-on-accent);
+    color: var(--text-error);
 }
 
-.no-plugins-selected {
+/* Информационная секция */
+.info-section p {
     margin: 8px 0;
-    font-style: italic;
+    line-height: 1.5;
 }
 
-/* Modal styles */
-.plugin-selection-modal .modal-header {
-    margin-bottom: 16px;
-    padding-bottom: 12px;
-    border-bottom: 2px solid var(--background-modifier-border);
-}
-
-.plugin-selection-modal .modal-header h2 {
-    margin: 0;
+.info-section strong {
     color: var(--text-normal);
-    font-size: 1.3em;
+}
+
+/* Модальное окно выбора плагинов */
+.plugin-selection-modal .modal-header {
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--background-modifier-border);
+    margin-bottom: 16px;
 }
 
 .modal-plugin-list {
-    max-height: 400px;
+    max-height: 450px;
     overflow-y: auto;
-    margin: 16px 0;
 }
 
 .modal-plugin-item {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding: 8px 0;
-    border-bottom: 1px solid var(--background-modifier-border);
-    transition: opacity 0.2s;
+    padding: 10px;
+    border-radius: 8px;
+    transition: background-color 0.2s;
 }
 
-.modal-plugin-item:last-child {
-    border-bottom: none;
+.modal-plugin-item:hover {
+    background-color: var(--background-modifier-hover);
 }
 
 .modal-plugin-item.plugin-disabled {
-    opacity: 0.5;
-}
-
-.modal-plugin-item.plugin-disabled:hover {
-    opacity: 0.7;
-}
-
-.modal-plugin-info {
-    flex: 1;
-}
-
-.modal-plugin-name {
-    font-weight: 500;
-    margin-bottom: 2px;
-}
-
-.modal-plugin-id {
-    font-size: 0.85em;
-    color: var(--text-muted);
-    font-family: var(--font-monospace);
+    opacity: 0.6;
 }
 
 .modal-buttons {
     display: flex;
     justify-content: flex-end;
-    gap: 8px;
-    margin-top: 16px;
-    padding-top: 16px;
-    border-top: 1px solid var(--background-modifier-border);
+    gap: 10px;
+    margin-top: 20px;
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+    .settings-tab-container {
+        grid-template-columns: 1fr;
+    }
 }

@@ -22,17 +22,15 @@ export class I18nService {
     }
 
     private getCurrentLanguage(): SupportedLanguage {
-        // Автоопределение языка из настроек Obsidian
         const obsidianLang = localStorage.getItem('language') || 'en';
 
-        // Маппинг языков Obsidian на наши поддерживаемые языки
         const langMap: Record<string, SupportedLanguage> = {
             'en': 'en',
             'ru': 'ru',
-            'zh': 'en', // Пока только английский для китайского
+            'zh': 'en',
             'zh-cn': 'en',
             'zh-tw': 'en',
-            'es': 'en', // Пока только английский для испанского
+            'es': 'en',
             'es-es': 'en'
         };
 
@@ -47,12 +45,11 @@ export class I18nService {
             if (value && typeof value === 'object' && k in value) {
                 value = value[k];
             } else {
-                return key; // Возвращаем ключ если перевод не найден
+                return key;
             }
         }
 
         if (typeof value === 'string') {
-            // Заменяем параметры в строке
             return value.replace(/\{(\w+)\}/g, (match: string, paramKey: string) => {
                 return params[paramKey] !== undefined ? params[paramKey] : match;
             });
