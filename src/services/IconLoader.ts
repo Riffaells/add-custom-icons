@@ -8,6 +8,7 @@ export class IconLoader {
 	private readonly manifestDir: string;
 	private debugMode: boolean = false;
 	private _oldCache: IconCache;
+	private iconCache: IconCache;
 
 	constructor(app: App, manifestDir: string) {
 		this.app = app;
@@ -29,9 +30,18 @@ export class IconLoader {
 		changedCount: number;
 		newCache: IconCache
 	}> {
+		this.iconCache = iconCache;
 		const iconsFolderPath = this.getIconsFolderPath();
 		try {
 			this.debugLog('Scanning for icons...');
+			
+			// Быстрая проверка существования папки
+			const folderExists = await this.checkFolderExists(iconsFolderPath);
+			if (!folderExists) {
+				this.debugLog('Icons folder does not exist, skipping scan');
+				return {loadedCount: 0, changedCount: 0, newCache: iconCache};
+			}
+			
 			const iconFiles = await this.listIconsRecursive(iconsFolderPath, '');
 			const svgFiles = this.filterSvgFiles(iconFiles);
 
@@ -63,8 +73,9 @@ export class IconLoader {
 			if (key === '_cacheVersion') continue;
 
 			const cachedIcon = iconCache[key] as IconCacheEntry;
-			if (cachedIcon?.iconId && cachedIcon?.svgContent) {
-				addIcon(cachedIcon.iconId, cachedIcon.svgContent);
+			if (cachedIcon?.iconId) {
+				// Загружаем иконку из файла (так как SVG не в кэше)
+				this.loadIconFromFile(cachedIcon.iconId, key);
 				restoredCount++;
 			}
 		}
@@ -73,11 +84,39 @@ export class IconLoader {
 		return restoredCount;
 	}
 
+	private async loadIconFromFile(iconId: string, iconPath: string): Promise<void> {
+		try {
+			const rawSvgContent = await this.app.vault.adapter.read(iconPath);
+			const svgContent = HelperUtils.normalizeSvgContent(rawSvgContent);
+			addIcon(iconId, svgContent);
+		} catch (error) {
+			this.debugLog(`Failed to load icon ${iconId} from ${iconPath}:`, error);
+		}
+	}
+
+	// Метод для получения статистики использования памяти  
+	getMemoryStats(): { total: number } {
+		// Упрощенная статистика - просто общее количество
+		const cacheKeys = Object.keys(this.iconCache || {});
+		return {
+			total: cacheKeys.length > 0 ? cacheKeys.length - 1 : 0 // -1 для _cacheVersion
+		};
+	}
+
 	private getIconsFolderPath(): string {
 		if (!this.manifestDir) {
 			throw new Error('Plugin directory not found');
 		}
 		return `${this.manifestDir}/${CONFIG.ICONS_FOLDER}`;
+	}
+
+	private async checkFolderExists(folderPath: string): Promise<boolean> {
+		try {
+			await this.app.vault.adapter.stat(folderPath);
+			return true;
+		} catch {
+			return false;
+		}
 	}
 
 	private filterSvgFiles(iconFiles: IconFile[]): IconFile[] {
@@ -89,10 +128,9 @@ export class IconLoader {
 	}
 
 	private async processIconsInBatches(svgFiles: IconFile[], iconCache: IconCache): Promise<ProcessIconResult[]> {
-		const results = await HelperUtils.runPromisesInBatches(
+		const results = await HelperUtils.runPromisesSequentiallyWithYielding(
 			svgFiles,
-			(icon) => this.processIcon(icon, iconCache),
-			CONFIG.BATCH_SIZE
+			(icon) => this.processIcon(icon, iconCache)
 		);
 		return results.filter((result): result is ProcessIconResult => result.success);
 	}
@@ -128,8 +166,9 @@ export class IconLoader {
 	private async processIcon(icon: IconFile, iconCache: IconCache): Promise<ProcessIconResult | { success: false }> {
 		try {
 			const cacheResult = await this.checkIconCache(icon, iconCache);
-			if (cacheResult.useCache && cacheResult.iconId && cacheResult.svgContent && cacheResult.data) {
-				addIcon(cacheResult.iconId, cacheResult.svgContent);
+			if (cacheResult.useCache && cacheResult.iconId && cacheResult.data) {
+				// Загружаем иконку из файла (SVG не в кэше)
+				await this.loadIconFromFile(cacheResult.iconId, icon.path);
 				return {
 					path: icon.path,
 					data: cacheResult.data,
@@ -159,7 +198,6 @@ export class IconLoader {
 	private async checkIconCache(icon: IconFile, iconCache: IconCache): Promise<{
 		useCache: boolean;
 		iconId?: string;
-		svgContent?: string;
 		data?: IconCacheEntry;
 		fileStat?: any;
 	}> {
@@ -172,7 +210,6 @@ export class IconLoader {
 			return {
 				useCache: true,
 				iconId: cachedIcon.iconId,
-				svgContent: cachedIcon.svgContent,
 				data: cachedIcon
 			};
 		}
@@ -190,11 +227,13 @@ export class IconLoader {
 		const rawSvgContent = await this.app.vault.adapter.read(icon.path);
 		const svgContent = HelperUtils.normalizeSvgContent(rawSvgContent);
 
+		// Сохраняем только метаданные, не SVG контент
 		const cacheEntry: IconCacheEntry = {
 			mtime: fileStat.mtime,
 			size: fileStat.size,
 			iconId: iconId,
-			svgContent: svgContent
+			isLoaded: false
+			// svgContent не сохраняем для экономии памяти
 		};
 
 		return {

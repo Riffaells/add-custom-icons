@@ -1,104 +1,73 @@
-/* Общие стили для страницы настроек */
+/* Global Settings Container */
 .settings-tab-container {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 24px;
-    padding: 16px;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-}
-
-/* Стили для карточек секций */
-.settings-section-card {
-    background-color: var(--background-secondary);
-    border-radius: 12px;
-    padding: 20px;
-    border: 1px solid var(--background-modifier-border);
-    transition: all 0.2s ease-in-out;
     display: flex;
     flex-direction: column;
+    gap: 24px;
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px 0;
 }
 
-.settings-section-card:hover {
-    border-color: var(--interactive-accent-hover);
-}
-
-.settings-section-card .setting-item {
-    padding: 12px 0;
+/* Section Headers - Simplified */
+.settings-tab-container h3 {
+    margin: 0 0 12px 0;
+    font-size: 1.1em;
+    font-weight: 600;
+    color: var(--text-normal);
+    padding-bottom: 8px;
     border-bottom: 1px solid var(--background-modifier-border);
 }
 
-.settings-section-card .setting-item:last-child {
-    border-bottom: none;
-}
-
-/* Заголовок секции */
-.settings-section-header {
+/* Icon Actions Buttons */
+.icon-actions {
     display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 16px;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 12px;
+    margin-bottom: 12px;
 }
 
-.settings-section-header .section-icon {
-    font-size: 22px;
+.icon-actions button {
+    flex: 1;
+    min-width: 140px;
+    justify-content: center;
+}
+
+/* Loaded Icons Count - Minimalist */
+.loaded-icons-count-setting .setting-item-control {
+    display: none; /* Hide the empty control side */
+}
+
+.loaded-icons-count-setting .setting-item-info {
+    flex: 1 1 auto;
+    text-align: right; /* Align text to the right for info */
+}
+
+.loaded-icons-count-setting .setting-item-description {
+    font-size: 0.9em;
     color: var(--text-muted);
 }
 
-.settings-section-header h3 {
-    margin: 0;
-    font-size: 1.2em;
-    font-weight: 600;
-    color: var(--text-normal);
-}
-
-/* Кнопки и элементы управления */
-.icon-actions {
-    display: flex;
-    gap: 12px;
-    margin-top: 12px;
-}
-
-.icon-button {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 14px;
-    background-color: var(--interactive-normal);
-    color: var(--text-on-accent);
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 0.95em;
-    font-weight: 500;
-    transition: background-color 0.2s;
-}
-
-.icon-button:hover {
-    background-color: var(--interactive-hover);
-}
-
-.icon-button svg {
-    width: 18px;
-    height: 18px;
-}
-
-/* Список выбранных плагинов */
+/* Plugin Selection Tags - Minimalist */
 .selected-plugins-compact {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
     margin: 12px 0;
+    padding: 0;
+    background: transparent;
+    border: none;
 }
 
 .plugin-tag {
     display: inline-flex;
     align-items: center;
-    padding: 6px 10px;
-    background-color: var(--background-primary);
+    padding: 4px 10px;
+    background-color: var(--background-secondary); /* Softer background */
+    color: var(--text-normal);
     border: 1px solid var(--background-modifier-border);
-    border-radius: 16px;
-    font-size: 0.9em;
-    color: var(--text-muted);
+    border-radius: 4px; /* Less rounded */
+    font-size: 0.85em;
 }
 
 .plugin-tag-remove {
@@ -106,62 +75,62 @@
     cursor: pointer;
     color: var(--text-muted);
     font-weight: bold;
-    font-size: 1.2em;
+    font-size: 1.1em;
     transition: color 0.2s;
+    display: flex;
+    align-items: center;
 }
 
 .plugin-tag-remove:hover {
     color: var(--text-error);
 }
 
-/* Информационная секция */
-.info-section p {
-    margin: 8px 0;
-    line-height: 1.5;
+/* Modal Styling */
+.plugin-selection-modal .modal-content {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
 }
 
-.info-section strong {
-    color: var(--text-normal);
-}
-
-/* Модальное окно выбора плагинов */
-.plugin-selection-modal .modal-header {
+.modal-search-container {
+    position: sticky;
+    top: 0;
+    z-index: 10;
     padding-bottom: 12px;
     border-bottom: 1px solid var(--background-modifier-border);
-    margin-bottom: 16px;
 }
 
 .modal-plugin-list {
-    max-height: 450px;
+    max-height: 400px;
     overflow-y: auto;
-}
-
-.modal-plugin-item {
-    display: flex;
-    align-items: center;
-    padding: 10px;
-    border-radius: 8px;
-    transition: background-color 0.2s;
-}
-
-.modal-plugin-item:hover {
-    background-color: var(--background-modifier-hover);
-}
-
-.modal-plugin-item.plugin-disabled {
-    opacity: 0.6;
+    padding-right: 4px;
 }
 
 .modal-buttons {
     display: flex;
     justify-content: flex-end;
-    gap: 10px;
-    margin-top: 20px;
+    gap: 12px;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--background-modifier-border);
 }
 
-/* Адаптивность */
-@media (max-width: 768px) {
+/* Mobile Adaptation */
+@media (max-width: 600px) {
     .settings-tab-container {
-        grid-template-columns: 1fr;
+        padding: 10px 0;
+        gap: 20px;
+    }
+
+    .icon-actions {
+        flex-direction: column;
+    }
+
+    .icon-actions button {
+        width: 100%;
+    }
+    
+    .loaded-icons-count-setting .setting-item-info {
+        text-align: left; /* Align left on mobile */
     }
 }

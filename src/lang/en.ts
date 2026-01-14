@@ -2,6 +2,7 @@ export const enTranslations = {
   "settings": {
     "title": "Add Custom Icons",
     "iconsManagement": {
+      "header": "🎨 Icons Management",
       "title": "Icons Management",
       "folderPath": "Icons Folder",
       "folderDesc": "Path to SVG icons folder",
@@ -12,6 +13,7 @@ export const enTranslations = {
       "pathCopied": "Path copied to clipboard: {path}"
     },
     "autoRestart": {
+      "header": "🔄 Auto Restart",
       "title": "Auto Restart"
     },
     "enableAutoRestart": {
@@ -23,10 +25,12 @@ export const enTranslations = {
       "desc": "What to restart after loading icons"
     },
     "pluginSelection": {
+      "header": "🔌 Plugin Selection",
       "name": "Plugin Selection",
       "desc": "Select which plugins to restart after loading icons",
       "addPlugin": "Add Plugin",
       "removePlugin": "Remove",
+      "removePluginTooltip": "Remove",
       "noPlugins": "No plugins selected",
       "selectedCount": "Selected plugins: {count}",
       "noPluginsSelected": "No plugins selected. Click \"Configure Plugins\" to add.",
@@ -35,7 +39,9 @@ export const enTranslations = {
       "configurePlugins": "Configure Plugins",
       "selectPluginsTitle": "Select Plugins for Restart",
       "selectPluginsDesc": "Choose plugins that will be automatically restarted after loading icons.",
+      "searchPlaceholder": "Search plugins...",
       "noPluginsFound": "No other plugins found",
+      "noResultsFound": "No results found",
       "pluginDisabled": "(disabled)"
     },
     "options": {
@@ -44,13 +50,18 @@ export const enTranslations = {
       "none": "Nothing"
     },
     "info": {
-      "title": "Information",
-      "plugins": "Restart only selected plugins",
-      "obsidian": "Restart entire Obsidian application",
-      "none": "Just load icons without restart",
-      "supportedFormats": "Supported formats: SVG",
-      "folderStructure": "Folder structure: icons/ (subfolders supported)",
-      "naming": "Naming: File names become icon IDs"
+      "header": "📖 Information",
+      "details": {
+        "plugins": "Restart only selected plugins",
+        "obsidian": "Restart entire Obsidian application",
+        "none": "Just load icons without restart",
+        "supportedFormatsName": "Supported Formats",
+        "supportedFormats": "SVG",
+        "folderStructureName": "Folder Structure",
+        "folderStructure": "icons/ (subfolders supported)",
+        "namingName": "Naming Convention",
+        "naming": "File names become icon IDs"
+      }
     },
     "buttons": {
       "cancel": "Cancel",
@@ -59,6 +70,7 @@ export const enTranslations = {
       "remove": "Remove"
     },
     "debug": {
+      "header": "🐛 Debug",
       "title": "Debug",
       "enableDebug": {
         "name": "Debug Mode",

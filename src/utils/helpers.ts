@@ -31,18 +31,18 @@ export class HelperUtils {
 			.toLowerCase();
 	}
 
-	static async runPromisesInBatches<T, U>(
+	static async runPromisesSequentiallyWithYielding<T, U>(
 		items: T[],
-		asyncFn: (item: T) => Promise<U>,
-		batchSize: number
+		asyncFn: (item: T) => Promise<U>
 	): Promise<U[]> {
 		const results: U[] = [];
 
-		for (let i = 0; i < items.length; i += batchSize) {
-			const batch = items.slice(i, i + batchSize);
-			const promises = batch.map(asyncFn);
-			const batchResults = await Promise.all(promises);
-			results.push(...batchResults);
+		for (const item of items) {
+			const result = await asyncFn(item);
+			results.push(result);
+
+			// Yield to the main thread to keep the UI responsive
+			await new Promise(resolve => setTimeout(resolve, 0));
 		}
 
 		return results;

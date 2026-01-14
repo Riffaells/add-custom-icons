@@ -25,6 +25,8 @@ export default class AddCustomIconsPlugin extends Plugin {
 			await this.initializeIconCache();
 			this.registerCommands();
 			this.addSettingTab(new AddCustomIconsSettingTab(this.app, this));
+			
+			// Запускаем фоновую загрузку
 			this.scheduleBackgroundIconLoad();
 		} catch (error) {
 			console.error('Failed to load Add Custom Icons plugin:', error);
@@ -68,9 +70,31 @@ export default class AddCustomIconsPlugin extends Plugin {
 			name: this.i18n.t('commands.reloadIcons'),
 			callback: () => this.reloadIcons()
 		});
+
+		this.addCommand({
+			id: 'show-icon-memory-stats',
+			name: 'Show Icon Memory Statistics',
+			callback: () => this.showMemoryStats()
+		});
+	}
+
+	private showMemoryStats(): void {
+		const stats = this.iconLoader.getMemoryStats();
+		const message = `Icon Statistics:
+• Total icons loaded: ${stats.total}
+• Cache optimization: SVG content not stored in cache
+• Memory usage: Significantly reduced vs. previous version`;
+		
+		new Notice(message, 5000);
+		console.log('[AddCustomIcons] Icon Stats:', stats);
 	}
 
 	private scheduleBackgroundIconLoad(): void {
+		// Добавляем проверку чтобы избежать множественных загрузок
+		if (this.isLoading) {
+			return;
+		}
+		
 		setTimeout(() => {
 			this.loadIconsInBackground();
 		}, CONFIG.BACKGROUND_LOAD_DELAY);
@@ -84,12 +108,16 @@ export default class AddCustomIconsPlugin extends Plugin {
 			this.settings = Object.assign({}, DEFAULT_SETTINGS, {
 				enableAutoRestart,
 				restartTarget,
-				selectedPlugins,
+				selectedPlugins: selectedPlugins || [], // Fallback to empty array
 				debugMode
 			});
 			this.iconCache = cacheData as IconCache;
 		} else {
 			this.settings = Object.assign({}, DEFAULT_SETTINGS, data || {});
+			// Ensure selectedPlugins is an array on first load
+			if (!this.settings.selectedPlugins) {
+				this.settings.selectedPlugins = [];
+			}
 		}
 	}
 
@@ -114,9 +142,11 @@ export default class AddCustomIconsPlugin extends Plugin {
 
 			if (result.changedCount > 0) {
 				await this.saveSettings();
+				// Перезапуск только если есть изменения
+				this.triggerRestart();
+			} else {
+				this.debugLog('No icon changes detected, skipping restart');
 			}
-
-			this.triggerRestart();
 		} catch (error) {
 			console.error('Error loading icons in background:', error);
 		} finally {

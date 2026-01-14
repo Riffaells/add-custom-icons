@@ -3,6 +3,8 @@ export interface AddCustomIconsSettings {
 	enableAutoRestart: boolean;
 	selectedPlugins: string[];
 	debugMode: boolean;
+	lazyLoadIcons: boolean; // Новая настройка для ленивой загрузки
+	maxLoadedIcons: number; // Максимум иконок в памяти
 }
 
 export interface IconCache {
@@ -14,7 +16,8 @@ export interface IconCacheEntry {
 	mtime: number;
 	size: number;
 	iconId: string;
-	svgContent: string;
+	svgContent?: string; // Делаем опциональным для ленивой загрузки
+	isLoaded?: boolean; // Флаг загрузки в память
 }
 
 export interface IconFile {
