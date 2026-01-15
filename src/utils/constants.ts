@@ -5,7 +5,7 @@ export const CONFIG = {
 	SVG_EXTENSION: '.svg',
 	SUPPORTED_EXTENSIONS: ['.svg'],
 	ID_SEPARATOR: '_',
-	CACHE_VERSION: 2, // Увеличили версию из-за изменения структуры кэша
+	CACHE_VERSION: 2,
 	BACKGROUND_LOAD_DELAY: 3000, // Увеличили задержку с 1 до 3 секунд
 	MAX_LOADED_ICONS: 500, // Максимум иконок в памяти одновременно
 	LAZY_LOAD_ENABLED: true, // Включить ленивую загрузку
@@ -24,6 +24,6 @@ export const REGEX = {
 	WHITESPACE: /\s+/g,
 	DOTS: /\./g,
 	SVG_DIMENSIONS: / (?:width|height)="[^"]*"/g,
-	SVG_COLORS: /(fill|stroke)="(?!(none|currentColor))[^"]*"/g,
+	SVG_COLORS: /(fill|stroke)="(?!(none|currentColor|url))[^"]*"/g,
 	SVG_HAS_FILL_STROKE: / (fill|stroke)=/g
 } as const;

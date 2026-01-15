@@ -35,12 +35,12 @@
 
 /* Loaded Icons Count - Minimalist */
 .loaded-icons-count-setting .setting-item-control {
-    display: none; /* Hide the empty control side */
+    display: none;
 }
 
 .loaded-icons-count-setting .setting-item-info {
     flex: 1 1 auto;
-    text-align: right; /* Align text to the right for info */
+    text-align: right;
 }
 
 .loaded-icons-count-setting .setting-item-description {
@@ -54,19 +54,16 @@
     flex-wrap: wrap;
     gap: 8px;
     margin: 12px 0;
-    padding: 0;
-    background: transparent;
-    border: none;
 }
 
 .plugin-tag {
     display: inline-flex;
     align-items: center;
     padding: 4px 10px;
-    background-color: var(--background-secondary); /* Softer background */
+    background-color: var(--background-secondary);
     color: var(--text-normal);
     border: 1px solid var(--background-modifier-border);
-    border-radius: 4px; /* Less rounded */
+    border-radius: 4px;
     font-size: 0.85em;
 }
 
@@ -86,10 +83,10 @@
 }
 
 /* Modal Styling */
-.plugin-selection-modal .modal-content {
+.plugin-selection-modal .modal-content,
+.icons-browser-modal .modal-content {
     display: flex;
     flex-direction: column;
-    gap: 16px;
 }
 
 .modal-search-container {
@@ -103,7 +100,6 @@
 .modal-plugin-list {
     max-height: 400px;
     overflow-y: auto;
-    padding-right: 4px;
 }
 
 .modal-buttons {
@@ -115,22 +111,76 @@
     border-top: 1px solid var(--background-modifier-border);
 }
 
+/* Icon Grid */
+.icon-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 16px;
+    margin-top: 16px;
+    max-height: 60vh;
+    overflow-y: auto;
+    padding: 8px;
+}
+
+.icon-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 12px 4px;
+    border-radius: 8px;
+    transition: background-color 0.1s ease;
+    cursor: default;
+}
+
+.icon-item:hover {
+    background-color: var(--background-modifier-hover);
+}
+
+.icon-preview {
+    color: var(--text-normal);
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 8px;
+}
+
+.icon-preview svg {
+    width: 28px;
+    height: 28px;
+}
+
+.icon-info {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow: hidden;
+}
+
+.icon-name {
+    font-size: 0.75em;
+    color: var(--text-normal);
+    text-align: center;
+    width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.4;
+    padding: 0 4px;
+}
+
 /* Mobile Adaptation */
 @media (max-width: 600px) {
     .settings-tab-container {
         padding: 10px 0;
         gap: 20px;
     }
-
     .icon-actions {
         flex-direction: column;
     }
-
     .icon-actions button {
         width: 100%;
-    }
-    
-    .loaded-icons-count-setting .setting-item-info {
-        text-align: left; /* Align left on mobile */
     }
 }

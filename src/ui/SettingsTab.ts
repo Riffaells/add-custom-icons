@@ -1,4 +1,4 @@
-import { App, PluginSettingTab, Setting, ButtonComponent, Notice, Modal, DropdownComponent, TextComponent } from 'obsidian';
+import { App, PluginSettingTab, Setting, ButtonComponent, Notice, Modal, TextComponent, setIcon } from 'obsidian';
 import AddCustomIconsPlugin from '../../main';
 
 export class AddCustomIconsSettingTab extends PluginSettingTab {
@@ -23,8 +23,6 @@ export class AddCustomIconsSettingTab extends PluginSettingTab {
         if (this.plugin.settings.restartTarget === 'plugins') {
             this.createPluginSelectionInterface(mainContainer);
         }
-        
-        this.createDebugSection(mainContainer);
     }
 
     private createHeader(container: HTMLElement, titleKey: string): void {
@@ -50,6 +48,13 @@ export class AddCustomIconsSettingTab extends PluginSettingTab {
             .setButtonText(this.plugin.i18n.t('settings.iconsManagement.reloadIcons'))
             .setIcon('refresh-cw')
             .onClick(() => this.plugin.reloadIcons());
+        
+        new ButtonComponent(actionsContainer)
+            .setButtonText(this.plugin.i18n.t('settings.iconsBrowser.header'))
+            .setIcon('search')
+            .onClick(() => {
+                new IconsBrowserModal(this.app, this.plugin).open();
+            });
 
         new Setting(section)
             .setDesc(this.plugin.i18n.t('settings.iconsManagement.iconsLoaded', { count: this.plugin.loadedIconsCount }))
@@ -83,37 +88,6 @@ export class AddCustomIconsSettingTab extends PluginSettingTab {
                     await this.plugin.saveSettings();
                     this.display();
                 }));
-    }
-
-    private async openIconsFolder(): Promise<void> {
-        const iconsFolderRelativePath = `${this.plugin.manifest.dir}/icons`;
-        try {
-            const folderExists = await this.app.vault.adapter.exists(iconsFolderRelativePath);
-            if (!folderExists) {
-                await this.app.vault.adapter.mkdir(iconsFolderRelativePath);
-                new Notice(this.plugin.i18n.t('settings.iconsManagement.folderCreated', { path: iconsFolderRelativePath }));
-            }
-
-            // @ts-ignore
-            const adapter = this.app.vault.adapter;
-            // @ts-ignore
-            if (adapter.getBasePath) {
-                // @ts-ignore
-                const basePath = adapter.getBasePath();
-                const { join } = require('path');
-                const fullPath = join(basePath, iconsFolderRelativePath);
-                
-                // @ts-ignore
-                const { shell } = require('electron');
-                await shell.openPath(fullPath);
-            } else {
-                // Fallback for non-desktop or specialized adapters
-                new Notice(this.plugin.i18n.t('settings.iconsManagement.pathCopied', { path: iconsFolderRelativePath }));
-            }
-        } catch (error) {
-            console.error('Error opening icons folder:', error);
-            new Notice(this.plugin.i18n.t('settings.iconsManagement.pathCopied', { path: iconsFolderRelativePath }));
-        }
     }
 
     private createPluginSelectionInterface(containerEl: HTMLElement): void {
@@ -160,19 +134,130 @@ export class AddCustomIconsSettingTab extends PluginSettingTab {
         new Notice(this.plugin.i18n.t('notices.pluginRemoved'));
     }
 
-    private createDebugSection(containerEl: HTMLElement): void {
-        const section = containerEl.createEl('div', { cls: 'settings-section-card' });
-        this.createHeader(section, 'settings.debug.header');
+    private async openIconsFolder(): Promise<void> {
+        const iconsFolderRelativePath = `${this.plugin.manifest.dir}/icons`;
+        try {
+            const folderExists = await this.app.vault.adapter.exists(iconsFolderRelativePath);
+            if (!folderExists) {
+                await this.app.vault.adapter.mkdir(iconsFolderRelativePath);
+                new Notice(this.plugin.i18n.t('settings.iconsManagement.folderCreated', { path: iconsFolderRelativePath }));
+            }
 
-        new Setting(section)
-            .setName(this.plugin.i18n.t('settings.debug.enableDebug.name'))
-            .setDesc(this.plugin.i18n.t('settings.debug.enableDebug.desc'))
-            .addToggle(toggle => toggle
-                .setValue(this.plugin.settings.debugMode)
-                .onChange(async (value) => {
-                    this.plugin.settings.debugMode = value;
-                    await this.plugin.saveSettings();
-                }));
+            // @ts-ignore
+            const adapter = this.app.vault.adapter;
+            // @ts-ignore
+            if (adapter.getBasePath) {
+                // @ts-ignore
+                const basePath = adapter.getBasePath();
+                const { join } = require('path');
+                const fullPath = join(basePath, iconsFolderRelativePath);
+                
+                // @ts-ignore
+                const { shell } = require('electron');
+                await shell.openPath(fullPath);
+            } else {
+                new Notice(this.plugin.i18n.t('settings.iconsManagement.pathCopied', { path: iconsFolderRelativePath }));
+            }
+        } catch (error) {
+            console.error('Error opening icons folder:', error);
+            new Notice(this.plugin.i18n.t('settings.iconsManagement.pathCopied', { path: iconsFolderRelativePath }));
+        }
+    }
+}
+
+class IconsBrowserModal extends Modal {
+    plugin: AddCustomIconsPlugin;
+
+    constructor(app: App, plugin: AddCustomIconsPlugin) {
+        super(app);
+        this.plugin = plugin;
+    }
+
+    private currentBatchIndex = 0;
+    private batchSize = 50;
+    private filteredEntries: [string, any][] = [];
+    private grid: HTMLElement;
+
+    onOpen() {
+        const { contentEl } = this;
+        contentEl.empty();
+        contentEl.addClass('icons-browser-modal');
+
+        contentEl.createEl('h2', { text: this.plugin.i18n.t('settings.iconsBrowser.header') });
+
+        // Search
+        const searchContainer = contentEl.createEl('div', { cls: 'modal-search-container', attr: { style: 'position: relative; margin-bottom: 12px; border: none;' } });
+        const searchInput = new TextComponent(searchContainer);
+        searchInput.inputEl.style.width = '100%';
+        searchInput.setPlaceholder(this.plugin.i18n.t('settings.iconsBrowser.searchPlaceholder'));
+
+        this.grid = contentEl.createEl('div', { cls: 'icon-grid' });
+        
+        // Setup infinite scroll
+        this.grid.addEventListener('scroll', () => {
+            if (this.grid.scrollTop + this.grid.clientHeight >= this.grid.scrollHeight - 100) {
+                this.renderNextBatch();
+            }
+        });
+
+        const filterIcons = (filter: string = '') => {
+            const cache = this.plugin.iconCache;
+            const entries = Object.entries(cache).filter(([path, entry]) => path !== '_cacheVersion');
+            
+            this.filteredEntries = entries.filter(([path, entry]) => {
+                if (typeof entry !== 'object' || !entry || !('iconId' in entry)) {
+                    return false;
+                }
+                // @ts-ignore
+                const name = path.split('/').pop()?.toLowerCase() || '';
+                // @ts-ignore
+                const id = (entry.iconId || '').toLowerCase();
+                return name.includes(filter.toLowerCase()) || id.includes(filter.toLowerCase());
+            });
+
+            this.currentBatchIndex = 0;
+            this.grid.empty();
+            
+            if (this.filteredEntries.length === 0) {
+                this.grid.createEl('div', { text: this.plugin.i18n.t('settings.iconsBrowser.noIcons'), cls: 'setting-item-description' });
+                return;
+            }
+
+            this.renderNextBatch();
+        };
+
+        searchInput.onChange((value) => filterIcons(value));
+        filterIcons();
+    }
+
+    private renderNextBatch() {
+        const start = this.currentBatchIndex * this.batchSize;
+        const end = start + this.batchSize;
+        const batch = this.filteredEntries.slice(start, end);
+
+        if (batch.length === 0) return;
+
+        batch.forEach(([path, entry]) => {
+            // @ts-ignore
+            const iconId = entry.iconId;
+            const iconItem = this.grid.createEl('div', { 
+                cls: 'icon-item',
+                attr: { 'aria-label': iconId }
+            });
+            
+            const preview = iconItem.createEl('div', { cls: 'icon-preview' });
+            setIcon(preview, iconId);
+
+            const info = iconItem.createEl('div', { cls: 'icon-info' });
+            info.createEl('div', { cls: 'icon-name', text: iconId });
+        });
+
+        this.currentBatchIndex++;
+    }
+
+    onClose() {
+        const { contentEl } = this;
+        contentEl.empty();
     }
 }
 

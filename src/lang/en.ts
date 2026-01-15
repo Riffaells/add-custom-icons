@@ -12,6 +12,14 @@ export const enTranslations = {
       "folderCreated": "Folder created. Path copied: {path}",
       "pathCopied": "Path copied to clipboard: {path}"
     },
+    "iconsBrowser": {
+      "header": "📂 Icon Browser",
+      "desc": "View and manage your loaded icons. Optimizing an icon will fix ID collisions and remove unnecessary metadata.",
+      "searchPlaceholder": "Search icons...",
+      "optimize": "Optimize",
+      "optimizeTooltip": "Fix IDs and remove dimensions",
+      "noIcons": "No icons found"
+    },
     "autoRestart": {
       "header": "🔄 Auto Restart",
       "title": "Auto Restart"
