@@ -57,7 +57,7 @@ export default class AddCustomIconsPlugin extends Plugin {
 	private async initializeIconCache(): Promise<void> {
 		if (this.iconCache._cacheVersion === CONFIG.CACHE_VERSION) {
 			this.debugLog(`Loaded icon cache with ${Object.keys(this.iconCache).length - 1} entries`);
-			this.iconLoader.restoreIconsFromCache(this.iconCache);
+			this.iconLoader.restoreIconsFromCache(this.iconCache, this.settings.monochromeColors);
 		} else {
 			this.debugLog('Cache version mismatch or no cache found, will create new cache');
 			this.iconCache = { _cacheVersion: CONFIG.CACHE_VERSION };
@@ -136,7 +136,7 @@ export default class AddCustomIconsPlugin extends Plugin {
 		this.isLoading = true;
 
 		try {
-			const result = await this.iconLoader.loadIcons(this.iconCache);
+			const result = await this.iconLoader.loadIcons(this.iconCache, this.settings.monochromeColors);
 			this.iconCache = result.newCache;
 			this.loadedIconsCount = result.loadedCount;
 
@@ -164,7 +164,7 @@ export default class AddCustomIconsPlugin extends Plugin {
 
 		try {
 			this.isLoading = true;
-			const result = await this.iconLoader.loadIcons(this.iconCache);
+			const result = await this.iconLoader.loadIcons(this.iconCache, this.settings.monochromeColors);
 			this.iconCache = result.newCache;
 			this.loadedIconsCount = result.loadedCount;
 

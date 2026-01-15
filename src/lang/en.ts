@@ -20,6 +20,10 @@ export const enTranslations = {
       "optimizeTooltip": "Fix IDs and remove dimensions",
       "noIcons": "No icons found"
     },
+    "monochromeColors": {
+      "name": "Monochrome Colors",
+      "desc": "Comma-separated list of colors (e.g. #000, black) that should be converted to currentColor to support theming."
+    },
     "autoRestart": {
       "header": "🔄 Auto Restart",
       "title": "Auto Restart"

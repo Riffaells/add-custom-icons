@@ -14,9 +14,17 @@ export class HelperUtils {
 			.replace(REGEX.DOTS, CONFIG.ID_SEPARATOR);
 	}
 
-	static normalizeSvgContent(rawSvgContent: string): string {
+	static normalizeSvgContent(rawSvgContent: string, monochromeColors: string): string {
 		let svgContent = rawSvgContent.replace(REGEX.SVG_DIMENSIONS, '');
-		svgContent = svgContent.replace(REGEX.SVG_COLORS, '$1="currentColor"');
+		
+		// Replace user-defined monochrome colors with currentColor
+		if (monochromeColors) {
+			const colors = monochromeColors.split(',').map(c => c.trim()).filter(c => c.length > 0);
+			if (colors.length > 0) {
+				const colorsRegex = new RegExp(`(fill|stroke)="(${colors.join('|')})"`, 'gi');
+				svgContent = svgContent.replace(colorsRegex, '$1="currentColor"');
+			}
+		}
 
 		if (!REGEX.SVG_HAS_FILL_STROKE.test(svgContent)) {
 			svgContent = svgContent.replace('<svg', '<svg fill="currentColor"');

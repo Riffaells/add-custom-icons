@@ -47,7 +47,10 @@ export class AddCustomIconsSettingTab extends PluginSettingTab {
         new ButtonComponent(actionsContainer)
             .setButtonText(this.plugin.i18n.t('settings.iconsManagement.reloadIcons'))
             .setIcon('refresh-cw')
-            .onClick(() => this.plugin.reloadIcons());
+            .onClick(async () => {
+                await this.plugin.reloadIcons();
+                this.display();
+            });
         
         new ButtonComponent(actionsContainer)
             .setButtonText(this.plugin.i18n.t('settings.iconsBrowser.header'))
@@ -59,6 +62,22 @@ export class AddCustomIconsSettingTab extends PluginSettingTab {
         new Setting(section)
             .setDesc(this.plugin.i18n.t('settings.iconsManagement.iconsLoaded', { count: this.plugin.loadedIconsCount }))
             .setClass('loaded-icons-count-setting');
+
+        const colors = this.plugin.settings.monochromeColors
+            .split(',')
+            .map(c => c.trim())
+            .filter(c => c.length > 0);
+
+        new ColorsManager(
+            section, 
+            this.plugin.i18n.t('settings.monochromeColors.name'),
+            this.plugin.i18n.t('settings.monochromeColors.desc'),
+            colors,
+            async (newColors) => {
+                this.plugin.settings.monochromeColors = newColors.join(',');
+                await this.plugin.saveSettings();
+            }
+        ).render();
     }
 
     private createRestartSection(containerEl: HTMLElement): void {
@@ -361,5 +380,161 @@ class PluginSelectionModal extends Modal {
     onClose() {
         const { contentEl } = this;
         contentEl.empty();
+    }
+}
+
+class ColorsManager {
+    private containerEl: HTMLElement;
+    private title: string;
+    private description: string;
+    private colors: string[];
+    private onColorsChange: (colors: string[]) => Promise<void>;
+    private tagsListEl: HTMLElement;
+    private inputComponent: TextComponent;
+    private addButton: HTMLButtonElement | null = null;
+    private editingColor: string | null = null;
+
+    constructor(
+        containerEl: HTMLElement,
+        title: string,
+        description: string,
+        colors: string[],
+        onColorsChange: (colors: string[]) => Promise<void>
+    ) {
+        this.containerEl = containerEl;
+        this.title = title;
+        this.description = description;
+        this.colors = [...colors];
+        this.onColorsChange = onColorsChange;
+    }
+
+    render(): void {
+        const setting = new Setting(this.containerEl)
+            .setName(this.title)
+            .setDesc(this.description);
+
+        const controlsContainer = setting.controlEl.createDiv("tags-manager-controls");
+        
+        const inputRow = controlsContainer.createDiv("tags-input-row");
+        this.inputComponent = new TextComponent(inputRow.createDiv("tags-input-wrapper"));
+        this.inputComponent.setPlaceholder("#000000 or black");
+        
+        this.inputComponent.inputEl.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") {
+                e.preventDefault();
+                this.editingColor ? this.saveEdit() : this.addColor();
+            } else if (e.key === "Escape" && this.editingColor) {
+                this.cancelEdit();
+            }
+        });
+
+        this.addButton = inputRow.createEl("button", { cls: "mod-cta" });
+        this.addButton.addEventListener("click", () => {
+            this.editingColor ? this.saveEdit() : this.addColor();
+        });
+        this.updateButtonText();
+
+        this.tagsListEl = controlsContainer.createDiv("tags-list");
+        this.renderColorsList();
+    }
+
+    private updateButtonText(): void {
+        if (this.addButton) {
+            this.addButton.textContent = this.editingColor ? "Save" : "Add";
+        }
+    }
+
+    private renderColorsList(): void {
+        this.tagsListEl.empty();
+        
+        if (this.colors.length === 0) {
+             const emptyMsg = this.tagsListEl.createDiv("tags-empty-message");
+             emptyMsg.textContent = "No colors added";
+             return;
+        }
+
+        for (const color of this.colors) {
+            const tagEl = this.tagsListEl.createDiv("tag-item");
+            const tagText = tagEl.createSpan({ text: color });
+            tagText.addClass("tag-text");
+
+            const editBtn = tagEl.createEl("button", {
+                cls: "tag-action-btn",
+                attr: { "aria-label": `Edit ${color}` },
+            });
+            setIcon(editBtn, "pencil");
+            editBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                this.startEdit(color);
+            });
+
+            const removeBtn = tagEl.createEl("button", {
+                cls: "tag-action-btn tag-remove-btn",
+                attr: { "aria-label": `Remove ${color}` },
+            });
+            removeBtn.textContent = "×";
+            removeBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                this.removeColor(color);
+            });
+        }
+    }
+
+    private startEdit(color: string): void {
+        this.editingColor = color;
+        this.inputComponent.setValue(color);
+        this.inputComponent.inputEl.focus();
+        this.inputComponent.inputEl.select();
+        this.updateButtonText();
+    }
+
+    private cancelEdit(): void {
+        this.editingColor = null;
+        this.inputComponent.setValue("");
+        this.updateButtonText();
+    }
+
+    private async saveEdit(): Promise<void> {
+        if (!this.editingColor) return;
+        let newValue = this.inputComponent.getValue().trim();
+        if (!newValue) {
+             new Notice("Color cannot be empty");
+             return;
+        }
+
+        if (this.colors.includes(newValue) && newValue !== this.editingColor) {
+            new Notice("This color already exists");
+            return;
+        }
+
+        const index = this.colors.indexOf(this.editingColor);
+        if (index !== -1) {
+            this.colors[index] = newValue;
+            await this.onColorsChange(this.colors);
+            this.renderColorsList();
+        }
+        this.cancelEdit();
+    }
+
+    private async addColor(): Promise<void> {
+        const color = this.inputComponent.getValue().trim();
+        if (!color) return;
+
+        if (this.colors.includes(color)) {
+            new Notice("This color already exists");
+            this.inputComponent.setValue("");
+            return;
+        }
+
+        this.colors.push(color);
+        this.inputComponent.setValue("");
+        await this.onColorsChange(this.colors);
+        this.renderColorsList();
+    }
+
+    private async removeColor(color: string): Promise<void> {
+        this.colors = this.colors.filter(c => c !== color);
+        await this.onColorsChange(this.colors);
+        this.renderColorsList();
     }
 }

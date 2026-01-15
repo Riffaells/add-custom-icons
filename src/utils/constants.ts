@@ -17,7 +17,8 @@ export const DEFAULT_SETTINGS: AddCustomIconsSettings = {
 	selectedPlugins: ['Iconic'],
 	debugMode: false,
 	lazyLoadIcons: true, // Включаем ленивую загрузку по умолчанию
-	maxLoadedIcons: 500 // Лимит иконок в памяти
+	maxLoadedIcons: 500, // Лимит иконок в памяти
+	monochromeColors: '#000000,#000,black,#ffffff,#fff,white,#1C274C'
 };
 
 export const REGEX = {

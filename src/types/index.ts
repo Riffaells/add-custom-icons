@@ -5,6 +5,7 @@ export interface AddCustomIconsSettings {
 	debugMode: boolean;
 	lazyLoadIcons: boolean;
 	maxLoadedIcons: number;
+	monochromeColors: string;
 }
 
 export interface IconCache {

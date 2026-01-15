@@ -9,6 +9,7 @@ export class IconLoader {
 	private debugMode: boolean = false;
 	private _oldCache: IconCache;
 	private iconCache: IconCache;
+	private monochromeColors: string = "";
 
 	constructor(app: App, manifestDir: string) {
 		this.app = app;
@@ -25,12 +26,13 @@ export class IconLoader {
 		}
 	}
 
-	async loadIcons(iconCache: IconCache): Promise<{
+	async loadIcons(iconCache: IconCache, monochromeColors: string): Promise<{
 		loadedCount: number;
 		changedCount: number;
 		newCache: IconCache
 	}> {
 		this.iconCache = iconCache;
+		this.monochromeColors = monochromeColors;
 		const iconsFolderPath = this.getIconsFolderPath();
 		try {
 			this.debugLog('Scanning for icons...');
@@ -66,7 +68,8 @@ export class IconLoader {
 		}
 	}
 
-	restoreIconsFromCache(iconCache: IconCache): number {
+	restoreIconsFromCache(iconCache: IconCache, monochromeColors: string): number {
+		this.monochromeColors = monochromeColors;
 		let restoredCount = 0;
 
 		for (const key in iconCache) {
@@ -87,7 +90,7 @@ export class IconLoader {
 	private async loadIconFromFile(iconId: string, iconPath: string): Promise<void> {
 		try {
 			const rawSvgContent = await this.app.vault.adapter.read(iconPath);
-			const svgContent = HelperUtils.normalizeSvgContent(rawSvgContent);
+			const svgContent = HelperUtils.normalizeSvgContent(rawSvgContent, this.monochromeColors);
 			addIcon(iconId, svgContent);
 		} catch (error) {
 			this.debugLog(`Failed to load icon ${iconId} from ${iconPath}:`, error);
@@ -225,7 +228,7 @@ export class IconLoader {
 	}> {
 		const iconId = HelperUtils.generateIconId(icon);
 		const rawSvgContent = await this.app.vault.adapter.read(icon.path);
-		const svgContent = HelperUtils.normalizeSvgContent(rawSvgContent);
+		const svgContent = HelperUtils.normalizeSvgContent(rawSvgContent, this.monochromeColors);
 
 		// Сохраняем только метаданные, не SVG контент
 		const cacheEntry: IconCacheEntry = {

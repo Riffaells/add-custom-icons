@@ -8,7 +8,6 @@
     padding: 20px 0;
 }
 
-/* Section Headers - Simplified */
 .settings-tab-container h3 {
     margin: 0 0 12px 0;
     font-size: 1.1em;
@@ -18,13 +17,11 @@
     border-bottom: 1px solid var(--background-modifier-border);
 }
 
-/* Icon Actions Buttons */
 .icon-actions {
     display: flex;
     flex-wrap: wrap;
     gap: 12px;
-    margin-top: 12px;
-    margin-bottom: 12px;
+    margin: 12px 0;
 }
 
 .icon-actions button {
@@ -33,22 +30,11 @@
     justify-content: center;
 }
 
-/* Loaded Icons Count - Minimalist */
-.loaded-icons-count-setting .setting-item-control {
-    display: none;
-}
+.loaded-icons-count-setting .setting-item-control { display: none; }
+.loaded-icons-count-setting .setting-item-info { flex: 1 1 auto; text-align: right; }
+.loaded-icons-count-setting .setting-item-description { font-size: 0.9em; color: var(--text-muted); }
 
-.loaded-icons-count-setting .setting-item-info {
-    flex: 1 1 auto;
-    text-align: right;
-}
-
-.loaded-icons-count-setting .setting-item-description {
-    font-size: 0.9em;
-    color: var(--text-muted);
-}
-
-/* Plugin Selection Tags - Minimalist */
+/* Plugin Selection Tags */
 .selected-plugins-compact {
     display: flex;
     flex-wrap: wrap;
@@ -72,46 +58,22 @@
     cursor: pointer;
     color: var(--text-muted);
     font-weight: bold;
-    font-size: 1.1em;
-    transition: color 0.2s;
-    display: flex;
-    align-items: center;
 }
 
-.plugin-tag-remove:hover {
-    color: var(--text-error);
-}
+.plugin-tag-remove:hover { color: var(--text-error); }
 
 /* Modal Styling */
-.plugin-selection-modal .modal-content,
-.icons-browser-modal .modal-content {
-    display: flex;
-    flex-direction: column;
-}
+.icons-browser-modal .modal-content { display: flex; flex-direction: column; }
 
 .modal-search-container {
     position: sticky;
     top: 0;
     z-index: 10;
     padding-bottom: 12px;
+    background-color: var(--modal-background);
     border-bottom: 1px solid var(--background-modifier-border);
 }
 
-.modal-plugin-list {
-    max-height: 400px;
-    overflow-y: auto;
-}
-
-.modal-buttons {
-    display: flex;
-    justify-content: flex-end;
-    gap: 12px;
-    margin-top: 16px;
-    padding-top: 16px;
-    border-top: 1px solid var(--background-modifier-border);
-}
-
-/* Icon Grid */
 .icon-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
@@ -129,12 +91,9 @@
     padding: 12px 4px;
     border-radius: 8px;
     transition: background-color 0.1s ease;
-    cursor: default;
 }
 
-.icon-item:hover {
-    background-color: var(--background-modifier-hover);
-}
+.icon-item:hover { background-color: var(--background-modifier-hover); }
 
 .icon-preview {
     color: var(--text-normal);
@@ -146,18 +105,7 @@
     margin-bottom: 8px;
 }
 
-.icon-preview svg {
-    width: 28px;
-    height: 28px;
-}
-
-.icon-info {
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    overflow: hidden;
-}
+.icon-preview svg { width: 28px; height: 28px; }
 
 .icon-name {
     font-size: 0.75em;
@@ -167,20 +115,44 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    line-height: 1.4;
-    padding: 0 4px;
 }
 
-/* Mobile Adaptation */
+/* Colors Manager (Simplified) */
+.setting-item:has(.tags-manager-controls) { flex-direction: column; align-items: stretch; }
+
+.tags-input-row { display: flex; gap: 8px; margin-bottom: 8px; }
+.tags-input-wrapper { flex: 1; }
+.tags-input-wrapper input { width: 100%; }
+
+.tags-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 4px 0;
+}
+
+.tag-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 8px;
+    background-color: var(--background-modifier-border);
+    border-radius: 4px;
+    font-size: 0.85em;
+}
+
+.tag-text { color: var(--text-normal); }
+
+.tag-action-btn {
+    padding: 0 2px;
+    cursor: pointer;
+    color: var(--text-muted);
+}
+
+.tag-action-btn:hover { color: var(--text-normal); }
+.tag-remove-btn:hover { color: var(--text-error); }
+
 @media (max-width: 600px) {
-    .settings-tab-container {
-        padding: 10px 0;
-        gap: 20px;
-    }
-    .icon-actions {
-        flex-direction: column;
-    }
-    .icon-actions button {
-        width: 100%;
-    }
+    .icon-actions { flex-direction: column; }
+    .icon-actions button { width: 100%; }
 }
