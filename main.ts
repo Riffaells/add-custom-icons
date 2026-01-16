@@ -3,63 +3,60 @@ import { AddCustomIconsSettings, IconCache } from './src/types';
 import { DEFAULT_SETTINGS, CONFIG } from './src/utils/constants';
 import { IconLoader } from './src/services/IconLoader';
 import { PluginManager } from './src/services/PluginManager';
-import { I18nService } from './src/services/I18nService';
 import { AddCustomIconsSettingTab } from './src/ui/SettingsTab';
+import { Logger } from './src/utils/logger';
+import { t } from './src/lang/helpers';
 
 export default class AddCustomIconsPlugin extends Plugin {
 	settings: AddCustomIconsSettings = DEFAULT_SETTINGS;
 	iconCache: IconCache = { _cacheVersion: CONFIG.CACHE_VERSION };
 	iconLoader: IconLoader;
 	pluginManager: PluginManager;
-	i18n: I18nService;
+	logger: Logger;
 	isLoading = false;
 	loadedIconsCount = 0;
 
 	async onload(): Promise<void> {
-		console.log('Loading Add Custom Icons plugin');
+		console.debug('Loading Add Custom Icons plugin');
 
 		try {
 			await this.loadSettings();
+			this.logger = new Logger(this.settings.debugMode, 'AddCustomIcons');
 			this.initializeServices();
-			await this.i18n.loadLanguage();
-			await this.initializeIconCache();
+			this.initializeIconCache();
 			this.registerCommands();
 			this.addSettingTab(new AddCustomIconsSettingTab(this.app, this));
 			
 			// Запускаем фоновую загрузку
 			this.scheduleBackgroundIconLoad();
 		} catch (error) {
-			console.error('Failed to load Add Custom Icons plugin:', error);
+			this.logger.error('Failed to load Add Custom Icons plugin:', error);
 		}
 	}
 
-	private debugLog(...args: any[]): void {
-		if (this.settings.debugMode) {
-			console.log('[AddCustomIcons]', ...args);
-		}
-	}
+
 
 	onunload(): void {
-		console.log('Unloading Add Custom Icons plugin');
+		this.logger.debug('Unloading Add Custom Icons plugin');
 	}
 
 	private initializeServices(): void {
-		this.iconLoader = new IconLoader(this.app, this.manifest.dir || '');
-		this.pluginManager = new PluginManager(this.app, this.manifest.id);
-		this.i18n = new I18nService(this.app, this.manifest.dir || '');
-		this.updateDebugMode();
+		this.iconLoader = new IconLoader(this.app, this.manifest.dir || '', this.logger);
+		this.pluginManager = new PluginManager(this.app, this.manifest.id, this.logger);
 	}
 
 	private updateDebugMode(): void {
-		this.iconLoader.setDebugMode(this.settings.debugMode);
+		if (this.logger) {
+			this.logger.setDebugMode(this.settings.debugMode);
+		}
 	}
 
-	private async initializeIconCache(): Promise<void> {
+	private initializeIconCache(): void {
 		if (this.iconCache._cacheVersion === CONFIG.CACHE_VERSION) {
-			this.debugLog(`Loaded icon cache with ${Object.keys(this.iconCache).length - 1} entries`);
+			this.logger.debug(`Loaded icon cache with ${Object.keys(this.iconCache).length - 1} entries`);
 			this.iconLoader.restoreIconsFromCache(this.iconCache, this.settings.monochromeColors);
 		} else {
-			this.debugLog('Cache version mismatch or no cache found, will create new cache');
+			this.logger.debug('Cache version mismatch or no cache found, will create new cache');
 			this.iconCache = { _cacheVersion: CONFIG.CACHE_VERSION };
 		}
 	}
@@ -67,7 +64,7 @@ export default class AddCustomIconsPlugin extends Plugin {
 	private registerCommands(): void {
 		this.addCommand({
 			id: 'reload-custom-icons',
-			name: this.i18n.t('commands.reloadIcons'),
+			name: t('COMMAND_RELOAD_ICONS'),
 			callback: () => this.reloadIcons()
 		});
 
@@ -86,7 +83,7 @@ export default class AddCustomIconsPlugin extends Plugin {
 • Memory usage: Significantly reduced vs. previous version`;
 		
 		new Notice(message, 5000);
-		console.log('[AddCustomIcons] Icon Stats:', stats);
+		this.logger.debug('Icon Stats:', stats);
 	}
 
 	private scheduleBackgroundIconLoad(): void {
@@ -129,7 +126,7 @@ export default class AddCustomIconsPlugin extends Plugin {
 
 	private async loadIconsInBackground(): Promise<void> {
 		if (this.isLoading) {
-			this.debugLog('Icon loading already in progress');
+			this.logger.debug('Icon loading already in progress');
 			return;
 		}
 
@@ -145,10 +142,10 @@ export default class AddCustomIconsPlugin extends Plugin {
 				// Перезапуск только если есть изменения
 				this.triggerRestart();
 			} else {
-				this.debugLog('No icon changes detected, skipping restart');
+				this.logger.debug('No icon changes detected, skipping restart');
 			}
 		} catch (error) {
-			console.error('Error loading icons in background:', error);
+			this.logger.error('Error loading icons in background:', error);
 		} finally {
 			this.isLoading = false;
 		}
@@ -156,11 +153,11 @@ export default class AddCustomIconsPlugin extends Plugin {
 
 	async reloadIcons(): Promise<void> {
 		if (this.isLoading) {
-			new Notice(this.i18n.t('notices.loadingInProgress'));
+			new Notice(t('LOADING_IN_PROGRESS'));
 			return;
 		}
 
-		new Notice(this.i18n.t('notices.startingReload'));
+		new Notice(t('STARTING_RELOAD'));
 
 		try {
 			this.isLoading = true;
@@ -172,14 +169,14 @@ export default class AddCustomIconsPlugin extends Plugin {
 				await this.saveSettings();
 			}
 
-			new Notice(this.i18n.t('notices.iconsLoadedWithChanges', {
+			new Notice(t('ICONS_LOADED_WITH_CHANGES', {
 				count: result.loadedCount,
 				changed: result.changedCount
 			}));
 			this.triggerRestart();
 		} catch (error) {
-			console.error('Error reloading icons:', error);
-			new Notice(this.i18n.t('notices.errorReloading'));
+			this.logger.error('Error reloading icons:', error);
+			new Notice(t('ERROR_RELOADING'));
 		} finally {
 			this.isLoading = false;
 		}
@@ -187,7 +184,7 @@ export default class AddCustomIconsPlugin extends Plugin {
 
 	private triggerRestart(): void {
 		if (!this.settings.enableAutoRestart) {
-			this.debugLog('Auto restart is disabled');
+			this.logger.debug('Auto restart is disabled');
 			return;
 		}
 
@@ -199,7 +196,7 @@ export default class AddCustomIconsPlugin extends Plugin {
 				this.pluginManager.triggerObsidianRestart();
 				break;
 			case 'none':
-				this.debugLog('No restart target selected');
+				this.logger.debug('No restart target selected');
 				break;
 		}
 	}

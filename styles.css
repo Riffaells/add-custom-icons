@@ -74,6 +74,10 @@
     border-bottom: 1px solid var(--background-modifier-border);
 }
 
+.modal-search-input-full-width {
+    width: 100%;
+}
+
 .icon-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));

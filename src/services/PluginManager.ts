@@ -1,5 +1,6 @@
 import { App, Notice, Plugin } from 'obsidian';
 import { InstalledPlugin } from '../types';
+import { Logger } from '../utils/logger';
 
 interface PluginWithReload extends Plugin {
 	reload?: () => void;
@@ -8,7 +9,7 @@ interface PluginWithReload extends Plugin {
 interface ObsidianApp extends App {
 	plugins: {
 		getPlugin(id: string): PluginWithReload | null;
-		manifests: Record<string, { name: string; [key: string]: any }>;
+		manifests: Record<string, { name: string; [key: string]: unknown }>;
 		enabledPlugins: Set<string>;
 	};
 }
@@ -16,20 +17,20 @@ interface ObsidianApp extends App {
 export class PluginManager {
 	private app: ObsidianApp;
 	private readonly manifestId: string;
+	private logger: Logger;
 
-	constructor(app: App, manifestId: string) {
+	constructor(app: App, manifestId: string, logger: Logger) {
 		this.app = app as ObsidianApp;
 		this.manifestId = manifestId;
+		this.logger = logger;
 	}
 
 	triggerPluginsReload(pluginIds: string[]): void {
 		if (!pluginIds || pluginIds.length === 0) {
-			console.log('No plugins selected for restart');
-			return;
+			this.logger.debug('No plugins selected for restart');			return;
 		}
 
-		console.log(`Attempting to reload plugins: ${pluginIds.join(', ')}`);
-
+		this.logger.debug(`Attempting to reload plugins: ${pluginIds.join(', ')}`);
 		let reloadedCount = 0;
 		let failedCount = 0;
 
@@ -37,46 +38,39 @@ export class PluginManager {
 			const plugin = this.app.plugins.getPlugin(pluginId);
 
 			if (plugin) {
-				console.log(`Found plugin: ${pluginId}, attempting reload`);
-
+				this.logger.debug(`Found plugin: ${pluginId}, attempting reload`);
 				setTimeout(() => {
 					try {
 						if (typeof plugin.reload === 'function') {
 							plugin.reload();
-							console.log(`Plugin ${pluginId} reloaded successfully`);
-							reloadedCount++;
+							this.logger.debug(`Plugin ${pluginId} reloaded successfully`);							reloadedCount++;
 						} else if (typeof plugin.onunload === 'function' && typeof plugin.onload === 'function') {
 							plugin.onunload();
 							setTimeout(() => {
 								plugin.onload();
-								console.log(`Plugin ${pluginId} reloaded successfully (manual cycle)`);
-								reloadedCount++;
+								this.logger.debug(`Plugin ${pluginId} reloaded successfully (manual cycle)`);								reloadedCount++;
 							}, 100);
 						} else {
-							console.log(`Plugin ${pluginId} does not have a reload method`);
-							failedCount++;
+							this.logger.debug(`Plugin ${pluginId} does not have a reload method`);							failedCount++;
 						}
 					} catch (error) {
-						console.error(`Error reloading plugin ${pluginId}:`, error);
+						this.logger.error(`Error reloading plugin ${pluginId}:`, error);
 						failedCount++;
 					}
 				}, 500 + (index * 100));
 			} else {
-				console.log(`Plugin ${pluginId} not found or not enabled`);
-				failedCount++;
+				this.logger.debug(`Plugin ${pluginId} not found or not enabled`);				failedCount++;
 			}
 		});
 
 		setTimeout(() => {
 			if (reloadedCount > 0 || failedCount > 0) {
-				console.log(`Plugin reload summary: ${reloadedCount} successful, ${failedCount} failed`);
-			}
+				this.logger.debug(`Plugin reload summary: ${reloadedCount} successful, ${failedCount} failed`);			}
 		}, 2000);
 	}
 
 	triggerObsidianRestart(): void {
-		console.log('Triggering Obsidian restart');
-		new Notice('Restarting Obsidian...');
+		this.logger.debug('Triggering Obsidian restart');		new Notice('Restarting Obsidian...');
 
 		setTimeout(() => {
 			// @ts-ignore

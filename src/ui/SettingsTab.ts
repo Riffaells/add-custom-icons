@@ -1,19 +1,36 @@
-import { App, PluginSettingTab, Setting, ButtonComponent, Notice, Modal, TextComponent, setIcon } from 'obsidian';
+import { App, PluginSettingTab, Setting, ButtonComponent, Notice, Modal, TextComponent, setIcon, DataAdapter } from 'obsidian';
 import AddCustomIconsPlugin from '../../main';
+import { IconCacheEntry } from '../types';
+import { t } from '../lang/helpers';
+import en from '../lang/locale/en';
+
+interface VaultAdapterWithBasePath extends DataAdapter {
+    getBasePath?: () => string;
+}
+
+interface AppWithVaultAdapterEnhancement extends App {
+    vault: App['vault'] & {
+        adapter: VaultAdapterWithBasePath;
+    };
+}
 
 export class AddCustomIconsSettingTab extends PluginSettingTab {
     plugin: AddCustomIconsPlugin;
+    app: AppWithVaultAdapterEnhancement;
 
     constructor(app: App, plugin: AddCustomIconsPlugin) {
         super(app, plugin);
         this.plugin = plugin;
+        this.app = app as AppWithVaultAdapterEnhancement;
     }
 
     display(): void {
         const { containerEl } = this;
         containerEl.empty();
 
-        containerEl.createEl('h1', { text: this.plugin.i18n.t('settings.title') });
+        new Setting(containerEl)
+            .setName(t('SETTINGS_TITLE'))
+            .setHeading();
 
         const mainContainer = containerEl.createEl('div', { cls: 'settings-tab-container' });
 
@@ -25,27 +42,29 @@ export class AddCustomIconsSettingTab extends PluginSettingTab {
         }
     }
 
-    private createHeader(container: HTMLElement, titleKey: string): void {
-        container.createEl('h3', { text: this.plugin.i18n.t(titleKey) });
+    private createHeader(container: HTMLElement, titleKey: keyof typeof en): void {
+        new Setting(container)
+            .setName(t(titleKey))
+            .setHeading();
     }
 
     private createIconsSection(containerEl: HTMLElement): void {
         const section = containerEl.createEl('div', { cls: 'settings-section-card' });
-        this.createHeader(section, 'settings.iconsManagement.header');
+        this.createHeader(section, 'ICONS_MANAGEMENT_HEADER');
 
         new Setting(section)
-            .setName(this.plugin.i18n.t('settings.iconsManagement.folderPath'))
-            .setDesc(`${this.plugin.i18n.t('settings.iconsManagement.folderDesc')}: ${this.plugin.manifest.dir}/icons/`);
+            .setName(t('FOLDER_PATH'))
+            .setDesc(`${t('FOLDER_DESC')}: ${this.plugin.manifest.dir}/icons/`);
 
         const actionsContainer = section.createEl('div', { cls: 'icon-actions' });
 
         new ButtonComponent(actionsContainer)
-            .setButtonText(this.plugin.i18n.t('settings.iconsManagement.openFolder'))
+            .setButtonText(t('OPEN_FOLDER'))
             .setIcon('folder')
             .onClick(() => this.openIconsFolder());
 
         new ButtonComponent(actionsContainer)
-            .setButtonText(this.plugin.i18n.t('settings.iconsManagement.reloadIcons'))
+            .setButtonText(t('RELOAD_ICONS'))
             .setIcon('refresh-cw')
             .onClick(async () => {
                 await this.plugin.reloadIcons();
@@ -53,14 +72,14 @@ export class AddCustomIconsSettingTab extends PluginSettingTab {
             });
         
         new ButtonComponent(actionsContainer)
-            .setButtonText(this.plugin.i18n.t('settings.iconsBrowser.header'))
+            .setButtonText(t('ICONS_BROWSER_HEADER'))
             .setIcon('search')
             .onClick(() => {
                 new IconsBrowserModal(this.app, this.plugin).open();
             });
 
         new Setting(section)
-            .setDesc(this.plugin.i18n.t('settings.iconsManagement.iconsLoaded', { count: this.plugin.loadedIconsCount }))
+            .setDesc(t('ICONS_LOADED', { count: this.plugin.loadedIconsCount }))
             .setClass('loaded-icons-count-setting');
 
         const colors = this.plugin.settings.monochromeColors
@@ -70,8 +89,8 @@ export class AddCustomIconsSettingTab extends PluginSettingTab {
 
         new ColorsManager(
             section, 
-            this.plugin.i18n.t('settings.monochromeColors.name'),
-            this.plugin.i18n.t('settings.monochromeColors.desc'),
+            t('MONOCHROME_COLORS_NAME'),
+            t('MONOCHROME_COLORS_DESC'),
             colors,
             async (newColors) => {
                 this.plugin.settings.monochromeColors = newColors.join(',');
@@ -82,11 +101,11 @@ export class AddCustomIconsSettingTab extends PluginSettingTab {
 
     private createRestartSection(containerEl: HTMLElement): void {
         const section = containerEl.createEl('div', { cls: 'settings-section-card' });
-        this.createHeader(section, 'settings.autoRestart.header');
+        this.createHeader(section, 'AUTO_RESTART_HEADER');
 
         new Setting(section)
-            .setName(this.plugin.i18n.t('settings.enableAutoRestart.name'))
-            .setDesc(this.plugin.i18n.t('settings.enableAutoRestart.desc'))
+            .setName(t('ENABLE_AUTO_RESTART_NAME'))
+            .setDesc(t('ENABLE_AUTO_RESTART_DESC'))
             .addToggle(toggle => toggle
                 .setValue(this.plugin.settings.enableAutoRestart)
                 .onChange(async (value) => {
@@ -95,12 +114,12 @@ export class AddCustomIconsSettingTab extends PluginSettingTab {
                 }));
 
         new Setting(section)
-            .setName(this.plugin.i18n.t('settings.restartTarget.name'))
-            .setDesc(this.plugin.i18n.t('settings.restartTarget.desc'))
+            .setName(t('RESTART_TARGET_NAME'))
+            .setDesc(t('RESTART_TARGET_DESC'))
             .addDropdown(dropdown => dropdown
-                .addOption('plugins', this.plugin.i18n.t('settings.options.plugins'))
-                .addOption('obsidian', this.plugin.i18n.t('settings.options.obsidian'))
-                .addOption('none', this.plugin.i18n.t('settings.options.none'))
+                .addOption('plugins', t('OPTIONS_PLUGINS'))
+                .addOption('obsidian', t('OPTIONS_OBSIDIAN'))
+                .addOption('none', t('OPTIONS_NONE'))
                 .setValue(this.plugin.settings.restartTarget)
                 .onChange(async (value: 'plugins' | 'obsidian' | 'none') => {
                     this.plugin.settings.restartTarget = value;
@@ -111,10 +130,10 @@ export class AddCustomIconsSettingTab extends PluginSettingTab {
 
     private createPluginSelectionInterface(containerEl: HTMLElement): void {
         const section = containerEl.createEl('div', { cls: 'settings-section-card' });
-        this.createHeader(section, 'settings.pluginSelection.header');
+        this.createHeader(section, 'PLUGIN_SELECTION_HEADER');
 
         const description = section.createEl('div', { cls: 'setting-item-description' });
-        description.setText(this.plugin.i18n.t('settings.pluginSelection.selectedCount', { count: this.plugin.settings.selectedPlugins.length }));
+        description.setText(t('SELECTED_COUNT', { count: this.plugin.settings.selectedPlugins.length }));
 
         if (this.plugin.settings.selectedPlugins.length > 0) {
             const pluginsList = section.createEl('div', { cls: 'selected-plugins-compact' });
@@ -126,7 +145,7 @@ export class AddCustomIconsSettingTab extends PluginSettingTab {
                 const removeBtn = pluginTag.createEl('span', { 
                     cls: 'plugin-tag-remove', 
                     text: '×',
-                    attr: { 'aria-label': this.plugin.i18n.t('settings.pluginSelection.removePluginTooltip') }
+                    attr: { 'aria-label': t('REMOVE_PLUGIN_TOOLTIP') }
                 });
                 removeBtn.onclick = async (e) => {
                     e.stopPropagation();
@@ -137,10 +156,10 @@ export class AddCustomIconsSettingTab extends PluginSettingTab {
         }
 
         new Setting(section)
-            .setName(this.plugin.i18n.t('settings.pluginSelection.manageList'))
-            .setDesc(this.plugin.i18n.t('settings.pluginSelection.manageDesc'))
+            .setName(t('MANAGE_LIST'))
+            .setDesc(t('MANAGE_DESC'))
             .addButton(button => button
-                .setButtonText(this.plugin.i18n.t('settings.pluginSelection.configurePlugins'))
+                .setButtonText(t('CONFIGURE_PLUGINS'))
                 .setClass('mod-cta')
                 .onClick(() => {
                     new PluginSelectionModal(this.app, this.plugin, () => this.display()).open();
@@ -150,7 +169,7 @@ export class AddCustomIconsSettingTab extends PluginSettingTab {
     private async removePlugin(pluginId: string): Promise<void> {
         this.plugin.settings.selectedPlugins = this.plugin.settings.selectedPlugins.filter(id => id !== pluginId);
         await this.plugin.saveSettings();
-        new Notice(this.plugin.i18n.t('notices.pluginRemoved'));
+        new Notice(t('PLUGIN_REMOVED'));
     }
 
     private async openIconsFolder(): Promise<void> {
@@ -159,27 +178,25 @@ export class AddCustomIconsSettingTab extends PluginSettingTab {
             const folderExists = await this.app.vault.adapter.exists(iconsFolderRelativePath);
             if (!folderExists) {
                 await this.app.vault.adapter.mkdir(iconsFolderRelativePath);
-                new Notice(this.plugin.i18n.t('settings.iconsManagement.folderCreated', { path: iconsFolderRelativePath }));
+                new Notice(t('FOLDER_CREATED', { path: iconsFolderRelativePath }));
             }
 
-            // @ts-ignore
             const adapter = this.app.vault.adapter;
-            // @ts-ignore
             if (adapter.getBasePath) {
-                // @ts-ignore
                 const basePath = adapter.getBasePath();
-                const { join } = require('path');
-                const fullPath = join(basePath, iconsFolderRelativePath);
+                // Use simple string concatenation instead of path.join
+                const separator = basePath.endsWith('/') || basePath.endsWith('\\') ? '' : '/';
+                const fullPath = basePath + separator + iconsFolderRelativePath;
                 
                 // @ts-ignore
                 const { shell } = require('electron');
                 await shell.openPath(fullPath);
             } else {
-                new Notice(this.plugin.i18n.t('settings.iconsManagement.pathCopied', { path: iconsFolderRelativePath }));
+                new Notice(t('PATH_COPIED', { path: iconsFolderRelativePath }));
             }
         } catch (error) {
-            console.error('Error opening icons folder:', error);
-            new Notice(this.plugin.i18n.t('settings.iconsManagement.pathCopied', { path: iconsFolderRelativePath }));
+            this.plugin.logger.error('Error opening icons folder:', error);
+            new Notice(t('PATH_COPIED', { path: iconsFolderRelativePath }));
         }
     }
 }
@@ -194,7 +211,7 @@ class IconsBrowserModal extends Modal {
 
     private currentBatchIndex = 0;
     private batchSize = 50;
-    private filteredEntries: [string, any][] = [];
+    private filteredEntries: [string, IconCacheEntry][] = [];
     private grid: HTMLElement;
 
     onOpen() {
@@ -202,13 +219,15 @@ class IconsBrowserModal extends Modal {
         contentEl.empty();
         contentEl.addClass('icons-browser-modal');
 
-        contentEl.createEl('h2', { text: this.plugin.i18n.t('settings.iconsBrowser.header') });
+        new Setting(contentEl)
+            .setName(t('ICONS_BROWSER_HEADER'))
+            .setHeading();
 
         // Search
         const searchContainer = contentEl.createEl('div', { cls: 'modal-search-container', attr: { style: 'position: relative; margin-bottom: 12px; border: none;' } });
         const searchInput = new TextComponent(searchContainer);
-        searchInput.inputEl.style.width = '100%';
-        searchInput.setPlaceholder(this.plugin.i18n.t('settings.iconsBrowser.searchPlaceholder'));
+        searchInput.inputEl.addClass('modal-search-input-full-width');
+        searchInput.setPlaceholder(t('SEARCH_ICONS_PLACEHOLDER'));
 
         this.grid = contentEl.createEl('div', { cls: 'icon-grid' });
         
@@ -223,13 +242,12 @@ class IconsBrowserModal extends Modal {
             const cache = this.plugin.iconCache;
             const entries = Object.entries(cache).filter(([path, entry]) => path !== '_cacheVersion');
             
-            this.filteredEntries = entries.filter(([path, entry]) => {
+            this.filteredEntries = entries.filter((item): item is [string, IconCacheEntry] => {
+                const [path, entry] = item;
                 if (typeof entry !== 'object' || !entry || !('iconId' in entry)) {
                     return false;
                 }
-                // @ts-ignore
                 const name = path.split('/').pop()?.toLowerCase() || '';
-                // @ts-ignore
                 const id = (entry.iconId || '').toLowerCase();
                 return name.includes(filter.toLowerCase()) || id.includes(filter.toLowerCase());
             });
@@ -238,7 +256,7 @@ class IconsBrowserModal extends Modal {
             this.grid.empty();
             
             if (this.filteredEntries.length === 0) {
-                this.grid.createEl('div', { text: this.plugin.i18n.t('settings.iconsBrowser.noIcons'), cls: 'setting-item-description' });
+                this.grid.createEl('div', { text: t('NO_ICONS'), cls: 'setting-item-description' });
                 return;
             }
 
@@ -295,16 +313,19 @@ class PluginSelectionModal extends Modal {
         contentEl.empty();
         contentEl.addClass('plugin-selection-modal');
 
-        contentEl.createEl('h2', { text: this.plugin.i18n.t('settings.pluginSelection.selectPluginsTitle') });
+        new Setting(contentEl)
+            .setName(t('SELECT_PLUGINS_TITLE'))
+            .setHeading();
+            
         contentEl.createEl('p', {
-            text: this.plugin.i18n.t('settings.pluginSelection.selectPluginsDesc'),
+            text: t('SELECT_PLUGINS_DESC'),
             cls: 'setting-item-description'
         });
 
         const searchContainer = contentEl.createEl('div', { cls: 'modal-search-container' });
         const searchInput = new TextComponent(searchContainer);
         searchInput.inputEl.addClass('modal-search-input');
-        searchInput.setPlaceholder(this.plugin.i18n.t('settings.pluginSelection.searchPlaceholder'));
+        searchInput.setPlaceholder(t('SEARCH_PLUGINS_PLACEHOLDER'));
 
         const pluginListContainer = contentEl.createEl('div', { cls: 'modal-plugin-list' });
         const installedPlugins = this.plugin.pluginManager.getInstalledPlugins();
@@ -312,7 +333,7 @@ class PluginSelectionModal extends Modal {
 
         if (installedPlugins.length === 0) {
             pluginListContainer.createEl('div', {
-                text: this.plugin.i18n.t('settings.pluginSelection.noPluginsFound'),
+                text: t('NO_PLUGINS_FOUND'),
                 cls: 'setting-item-description'
             });
         } else {
@@ -333,7 +354,7 @@ class PluginSelectionModal extends Modal {
                         }));
                 
                 if (!pluginInfo.enabled) {
-                    setting.nameEl.append(` ${this.plugin.i18n.t('settings.pluginSelection.pluginDisabled')}`);
+                    setting.nameEl.append(` ${t('PLUGIN_DISABLED')}`);
                     setting.settingEl.addClass('plugin-disabled');
                 }
                 pluginSettings.push(setting);
@@ -341,7 +362,7 @@ class PluginSelectionModal extends Modal {
         }
 
         const noResultsEl = pluginListContainer.createEl('div', {
-            text: this.plugin.i18n.t('settings.pluginSelection.noResultsFound'),
+            text: t('NO_RESULTS_FOUND'),
             cls: 'setting-item-description'
         });
         noResultsEl.hide();
@@ -353,22 +374,28 @@ class PluginSelectionModal extends Modal {
                 const name = setting.nameEl.textContent?.toLowerCase() || '';
                 const desc = setting.descEl.textContent?.toLowerCase() || '';
                 const isVisible = name.includes(lowerCaseQuery) || desc.includes(lowerCaseQuery);
-                setting.settingEl.style.display = isVisible ? '' : 'none';
                 if (isVisible) {
+                    setting.settingEl.show();
                     visibleCount++;
+                } else {
+                    setting.settingEl.hide();
                 }
             });
-            noResultsEl.style.display = visibleCount === 0 && installedPlugins.length > 0 ? '' : 'none';
+            if (visibleCount === 0 && installedPlugins.length > 0) {
+                noResultsEl.show();
+            } else {
+                noResultsEl.hide();
+            }
         });
 
         const buttonContainer = contentEl.createEl('div', { cls: 'modal-buttons' });
 
         new ButtonComponent(buttonContainer)
-            .setButtonText(this.plugin.i18n.t('settings.buttons.cancel'))
+            .setButtonText(t('CANCEL'))
             .onClick(() => this.close());
 
         new ButtonComponent(buttonContainer)
-            .setButtonText(this.plugin.i18n.t('settings.buttons.done'))
+            .setButtonText(t('DONE'))
             .setClass('mod-cta')
             .onClick(async () => {
                 await this.plugin.saveSettings();
@@ -422,7 +449,11 @@ class ColorsManager {
         this.inputComponent.inputEl.addEventListener("keydown", (e) => {
             if (e.key === "Enter") {
                 e.preventDefault();
-                this.editingColor ? this.saveEdit() : this.addColor();
+                if (this.editingColor) {
+                    this.saveEdit();
+                } else {
+                    this.addColor();
+                }
             } else if (e.key === "Escape" && this.editingColor) {
                 this.cancelEdit();
             }
@@ -430,7 +461,11 @@ class ColorsManager {
 
         this.addButton = inputRow.createEl("button", { cls: "mod-cta" });
         this.addButton.addEventListener("click", () => {
-            this.editingColor ? this.saveEdit() : this.addColor();
+            if (this.editingColor) {
+                this.saveEdit();
+            } else {
+                this.addColor();
+            }
         });
         this.updateButtonText();
 

@@ -1,30 +1,24 @@
 import {App, addIcon} from 'obsidian';
-import {IconFile, IconCache, IconCacheEntry, ProcessIconResult} from '../types';
+import {IconFile, IconCache, IconCacheEntry, ProcessIconResult, FileStat} from '../types';
 import {CONFIG} from '../utils/constants';
 import {HelperUtils} from '../utils/helpers';
+import { Logger } from '../utils/logger';
 
 export class IconLoader {
 	private app: App;
 	private readonly manifestDir: string;
-	private debugMode: boolean = false;
+	private logger: Logger;
 	private _oldCache: IconCache;
 	private iconCache: IconCache;
 	private monochromeColors: string = "";
 
-	constructor(app: App, manifestDir: string) {
+	constructor(app: App, manifestDir: string, logger: Logger) {
 		this.app = app;
 		this.manifestDir = manifestDir;
+		this.logger = logger;
 	}
 
-	setDebugMode(enabled: boolean): void {
-		this.debugMode = enabled;
-	}
 
-	private debugLog(...args: any[]): void {
-		if (this.debugMode) {
-			console.log('[IconLoader]', ...args);
-		}
-	}
 
 	async loadIcons(iconCache: IconCache, monochromeColors: string): Promise<{
 		loadedCount: number;
@@ -35,22 +29,22 @@ export class IconLoader {
 		this.monochromeColors = monochromeColors;
 		const iconsFolderPath = this.getIconsFolderPath();
 		try {
-			this.debugLog('Scanning for icons...');
+			this.logger.debug('Scanning for icons...');
 			
 			// Быстрая проверка существования папки
 			const folderExists = await this.checkFolderExists(iconsFolderPath);
 			if (!folderExists) {
-				this.debugLog('Icons folder does not exist, skipping scan');
+				this.logger.debug('Icons folder does not exist, skipping scan');
 				return {loadedCount: 0, changedCount: 0, newCache: iconCache};
 			}
 			
 			const iconFiles = await this.listIconsRecursive(iconsFolderPath, '');
 			const svgFiles = this.filterSvgFiles(iconFiles);
 
-			this.debugLog(`Found ${svgFiles.length} SVG icons. Processing...`);
+			this.logger.debug(`Found ${svgFiles.length} SVG icons. Processing...`);
 
 			if (svgFiles.length === 0) {
-				this.debugLog('No SVG icons found.');
+				this.logger.debug('No SVG icons found.');
 				return {loadedCount: 0, changedCount: 0, newCache: iconCache};
 			}
 
@@ -83,7 +77,7 @@ export class IconLoader {
 			}
 		}
 
-		this.debugLog(`Restored ${restoredCount} icons from cache`);
+		this.logger.debug(`Restored ${restoredCount} icons from cache`);
 		return restoredCount;
 	}
 
@@ -93,7 +87,7 @@ export class IconLoader {
 			const svgContent = HelperUtils.normalizeSvgContent(rawSvgContent, this.monochromeColors);
 			addIcon(iconId, svgContent);
 		} catch (error) {
-			this.debugLog(`Failed to load icon ${iconId} from ${iconPath}:`, error);
+			this.logger.debug(`Failed to load icon ${iconId} from ${iconPath}:`, error);
 		}
 	}
 
@@ -159,10 +153,10 @@ export class IconLoader {
 	}
 
 	private handleLoadIconsError(error: Error, iconsFolderPath: string): void {
-		console.error(`Error scanning icons folder at '${iconsFolderPath}':`, error);
+		this.logger.error(`Error scanning icons folder at '${iconsFolderPath}':`, error);
 
 		if (error.message?.includes('no such file or directory')) {
-			this.debugLog(`Please ensure the '${CONFIG.ICONS_FOLDER}' folder exists in the plugin directory: ${this.manifestDir}/${CONFIG.ICONS_FOLDER}`);
+			this.logger.debug(`Please ensure the '${CONFIG.ICONS_FOLDER}' folder exists in the plugin directory: ${this.manifestDir}/${CONFIG.ICONS_FOLDER}`);
 		}
 	}
 
@@ -180,6 +174,11 @@ export class IconLoader {
 				};
 			}
 
+			if (!cacheResult.fileStat) {
+				this.logger.error(`Failed to get file stats for ${icon.path}`);
+				return {success: false};
+			}
+
 			const processResult = await this.processNewIcon(icon, cacheResult.fileStat);
 			if (processResult.success) {
 				addIcon(processResult.iconId, processResult.svgContent);
@@ -193,7 +192,7 @@ export class IconLoader {
 
 			return {success: false};
 		} catch (error) {
-			this.debugLog(`Error processing SVG icon ${icon.path}:`, error);
+			this.logger.debug(`Error processing SVG icon ${icon.path}:`, error);
 			return {success: false};
 		}
 	}
@@ -202,7 +201,7 @@ export class IconLoader {
 		useCache: boolean;
 		iconId?: string;
 		data?: IconCacheEntry;
-		fileStat?: any;
+		fileStat?: FileStat;
 	}> {
 		const fileStat = await this.app.vault.adapter.stat(icon.path);
 		const cachedIcon = iconCache[icon.path] as IconCacheEntry;
@@ -217,10 +216,10 @@ export class IconLoader {
 			};
 		}
 
-		return {useCache: false, fileStat};
+		return {useCache: false, fileStat: fileStat || undefined};
 	}
 
-	private async processNewIcon(icon: IconFile, fileStat: any): Promise<{
+	private async processNewIcon(icon: IconFile, fileStat: FileStat): Promise<{
 		success: boolean;
 		iconId: string;
 		svgContent: string;
@@ -258,7 +257,7 @@ export class IconLoader {
 
 			return iconFiles;
 		} catch (error) {
-			this.debugLog(`Could not list files for folder '${folderPath}'. It might not exist.`, error);
+			this.logger.debug(`Could not list files for folder '${folderPath}'. It might not exist.`, error);
 			return [];
 		}
 	}

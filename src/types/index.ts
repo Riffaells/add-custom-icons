@@ -40,3 +40,8 @@ export interface InstalledPlugin {
 	name: string;
 	enabled: boolean;
 }
+
+export interface FileStat {
+    mtime: number;
+    size: number;
+}

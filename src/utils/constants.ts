@@ -1,4 +1,4 @@
-import { AddCustomIconsSettings } from '../types';
+import {AddCustomIconsSettings} from '../types';
 
 export const CONFIG = {
 	ICONS_FOLDER: 'icons',
@@ -6,18 +6,18 @@ export const CONFIG = {
 	SUPPORTED_EXTENSIONS: ['.svg'],
 	ID_SEPARATOR: '_',
 	CACHE_VERSION: 2,
-	BACKGROUND_LOAD_DELAY: 3000, // Увеличили задержку с 1 до 3 секунд
-	MAX_LOADED_ICONS: 500, // Максимум иконок в памяти одновременно
-	LAZY_LOAD_ENABLED: true, // Включить ленивую загрузку
+	BACKGROUND_LOAD_DELAY: 3000,
+	MAX_LOADED_ICONS: 500,
+	LAZY_LOAD_ENABLED: true,
 } as const;
 
 export const DEFAULT_SETTINGS: AddCustomIconsSettings = {
-	restartTarget: 'none', // Отключили автоперезапуск по умолчанию
-	enableAutoRestart: false, // Отключили автоперезапуск
+	restartTarget: 'none',
+	enableAutoRestart: false,
 	selectedPlugins: ['Iconic'],
 	debugMode: false,
-	lazyLoadIcons: true, // Включаем ленивую загрузку по умолчанию
-	maxLoadedIcons: 500, // Лимит иконок в памяти
+	lazyLoadIcons: true,
+	maxLoadedIcons: 500,
 	monochromeColors: '#000000,#000,black,#ffffff,#fff,white,#1C274C'
 };
 
