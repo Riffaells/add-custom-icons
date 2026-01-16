@@ -7,17 +7,17 @@ export class Logger {
         this.prefix = prefix ? `[${prefix}] ` : '';
     }
 
-    debug(...args: any[]) {
+    debug(...args: unknown[]) {
         if (this.debugMode) {
             console.debug(this.prefix, ...args);
         }
     }
 
-    warn(...args: any[]) {
+    warn(...args: unknown[]) {
         console.warn(this.prefix, ...args);
     }
 
-    error(...args: any[]) {
+    error(...args: unknown[]) {
         console.error(this.prefix, ...args);
     }
 

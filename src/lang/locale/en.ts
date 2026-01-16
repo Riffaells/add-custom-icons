@@ -7,7 +7,7 @@ export default {
 	ICONS_MANAGEMENT_TITLE: "Icons Management",
 	FOLDER_PATH: "Icons Folder",
 	FOLDER_DESC: "Path to SVG icons folder",
-	OPEN_FOLDER: "Open Folder",
+	COPY_FOLDER_PATH: "Copy Folder Path",
 	RELOAD_ICONS: "Reload Icons",
 	ICONS_LOADED: "Icons loaded: {count}",
 	FOLDER_CREATED: "Folder created. Path copied: {path}",

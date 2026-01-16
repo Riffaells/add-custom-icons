@@ -7,7 +7,7 @@ export default {
 	ICONS_MANAGEMENT_TITLE: "Управление иконками",
 	FOLDER_PATH: "Папка с иконками",
 	FOLDER_DESC: "Путь к папке с SVG иконками",
-	OPEN_FOLDER: "Открыть папку",
+	COPY_FOLDER_PATH: "Копировать путь к папке",
 	RELOAD_ICONS: "Перезагрузить иконки",
 	ICONS_LOADED: "Загружено иконок: {count}",
 	FOLDER_CREATED: "Папка создана. Путь скопирован: {path}",

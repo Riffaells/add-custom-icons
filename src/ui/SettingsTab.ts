@@ -1,27 +1,15 @@
-import { App, PluginSettingTab, Setting, ButtonComponent, Notice, Modal, TextComponent, setIcon, DataAdapter } from 'obsidian';
+import { App, PluginSettingTab, Setting, ButtonComponent, Notice, Modal, TextComponent, setIcon } from 'obsidian';
 import AddCustomIconsPlugin from '../../main';
 import { IconCacheEntry } from '../types';
 import { t } from '../lang/helpers';
 import en from '../lang/locale/en';
 
-interface VaultAdapterWithBasePath extends DataAdapter {
-    getBasePath?: () => string;
-}
-
-interface AppWithVaultAdapterEnhancement extends App {
-    vault: App['vault'] & {
-        adapter: VaultAdapterWithBasePath;
-    };
-}
-
 export class AddCustomIconsSettingTab extends PluginSettingTab {
     plugin: AddCustomIconsPlugin;
-    app: AppWithVaultAdapterEnhancement;
 
     constructor(app: App, plugin: AddCustomIconsPlugin) {
         super(app, plugin);
         this.plugin = plugin;
-        this.app = app as AppWithVaultAdapterEnhancement;
     }
 
     display(): void {
@@ -59,8 +47,8 @@ export class AddCustomIconsSettingTab extends PluginSettingTab {
         const actionsContainer = section.createEl('div', { cls: 'icon-actions' });
 
         new ButtonComponent(actionsContainer)
-            .setButtonText(t('OPEN_FOLDER'))
-            .setIcon('folder')
+            .setButtonText(t('COPY_FOLDER_PATH'))
+            .setIcon('copy')
             .onClick(() => this.openIconsFolder());
 
         new ButtonComponent(actionsContainer)
@@ -178,25 +166,24 @@ export class AddCustomIconsSettingTab extends PluginSettingTab {
             const folderExists = await this.app.vault.adapter.exists(iconsFolderRelativePath);
             if (!folderExists) {
                 await this.app.vault.adapter.mkdir(iconsFolderRelativePath);
-                new Notice(t('FOLDER_CREATED', { path: iconsFolderRelativePath }));
             }
 
+            // Get the full path and copy to clipboard
             const adapter = this.app.vault.adapter;
-            if (adapter.getBasePath) {
+            if ('getBasePath' in adapter && typeof adapter.getBasePath === 'function') {
                 const basePath = adapter.getBasePath();
-                // Use simple string concatenation instead of path.join
                 const separator = basePath.endsWith('/') || basePath.endsWith('\\') ? '' : '/';
                 const fullPath = basePath + separator + iconsFolderRelativePath;
                 
-                // @ts-ignore
-                const { shell } = require('electron');
-                await shell.openPath(fullPath);
+                await navigator.clipboard.writeText(fullPath);
+                new Notice(t('PATH_COPIED', { path: fullPath }));
             } else {
+                await navigator.clipboard.writeText(iconsFolderRelativePath);
                 new Notice(t('PATH_COPIED', { path: iconsFolderRelativePath }));
             }
         } catch (error) {
-            this.plugin.logger.error('Error opening icons folder:', error);
-            new Notice(t('PATH_COPIED', { path: iconsFolderRelativePath }));
+            this.plugin.logger.error('Error accessing icons folder:', error);
+            new Notice(t('ERROR_RELOADING'));
         }
     }
 }
@@ -450,9 +437,9 @@ class ColorsManager {
             if (e.key === "Enter") {
                 e.preventDefault();
                 if (this.editingColor) {
-                    this.saveEdit();
+                    void this.saveEdit();
                 } else {
-                    this.addColor();
+                    void this.addColor();
                 }
             } else if (e.key === "Escape" && this.editingColor) {
                 this.cancelEdit();
@@ -462,9 +449,9 @@ class ColorsManager {
         this.addButton = inputRow.createEl("button", { cls: "mod-cta" });
         this.addButton.addEventListener("click", () => {
             if (this.editingColor) {
-                this.saveEdit();
+                void this.saveEdit();
             } else {
-                this.addColor();
+                void this.addColor();
             }
         });
         this.updateButtonText();

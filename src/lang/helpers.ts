@@ -11,11 +11,10 @@ export const localeMap: { [k: string]: Partial<typeof en> } = {
 
 const locale = localeMap[moment.locale()];
 
-// https://stackoverflow.com/a/41015840/
 function interpolate(str: string, params: Record<string, unknown>): string {
-    const names: string[] = Object.keys(params);
-    const vals: unknown[] = Object.values(params);
-    return new Function(...names, `return \`${str}\`;`)(...vals) as string;
+    return str.replace(/\{(\w+)}/g, (match, key) => {
+        return params[key] !== undefined ? String(params[key]) : match;
+    });
 }
 
 export function t(str: keyof typeof en, params?: Record<string, unknown>): string {

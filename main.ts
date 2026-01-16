@@ -93,7 +93,7 @@ export default class AddCustomIconsPlugin extends Plugin {
 		}
 		
 		setTimeout(() => {
-			this.loadIconsInBackground();
+			void this.loadIconsInBackground();
 		}, CONFIG.BACKGROUND_LOAD_DELAY);
 	}
 
