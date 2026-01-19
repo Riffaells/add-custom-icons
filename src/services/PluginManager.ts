@@ -46,15 +46,17 @@ export class PluginManager {
 							this.logger.debug(`Plugin ${pluginId} reloaded successfully`);							reloadedCount++;
 						} else if (typeof plugin.onunload === 'function' && typeof plugin.onload === 'function') {
 							plugin.onunload();
-							setTimeout(async () => {
-								try {
-									await plugin.onload();
-									this.logger.debug(`Plugin ${pluginId} reloaded successfully (manual cycle)`);
-									reloadedCount++;
-								} catch (error) {
-									this.logger.error(`Error reloading plugin ${pluginId}:`, error);
-									failedCount++;
-								}
+							setTimeout(() => {
+								(async () => {
+									try {
+										await plugin.onload();
+										this.logger.debug(`Plugin ${pluginId} reloaded successfully (manual cycle)`);
+										reloadedCount++;
+									} catch (error) {
+										this.logger.error(`Error reloading plugin ${pluginId}:`, error);
+										failedCount++;
+									}
+								})();
 							}, 100);
 						} else {
 							this.logger.debug(`Plugin ${pluginId} does not have a reload method`);							failedCount++;

@@ -170,29 +170,31 @@ export class AddCustomIconsSettingTab extends PluginSettingTab {
 
             // Open folder in system file explorer
             const adapter = this.app.vault.adapter;
-            if ('getBasePath' in adapter && typeof adapter.getBasePath === 'function') {
-                const basePath = adapter.getBasePath();
-                const separator = basePath.endsWith('/') || basePath.endsWith('\\') ? '' : '/';
-                const fullPath = basePath + separator + iconsFolderRelativePath;
-                
-                // Using require is the standard way in Obsidian plugins to access Electron APIs
-                // eslint-disable-next-line @typescript-eslint/no-var-requires
-                const { shell } = require('electron');
-                const result = await shell.openPath(fullPath);
-                
-                if (result) {
-                    // If there was an error opening the path
-                    this.plugin.logger.warn('Could not open folder, copying path instead:', result);
-                    await navigator.clipboard.writeText(fullPath);
-                    new Notice(t('PATH_COPIED', { path: fullPath }));
-                } else {
-                    new Notice(t('FOLDER_CREATED', { path: iconsFolderRelativePath }));
-                }
-            } else {
-                // Fallback: copy path to clipboard
-                await navigator.clipboard.writeText(iconsFolderRelativePath);
-                new Notice(t('PATH_COPIED', { path: iconsFolderRelativePath }));
-            }
+			if ('getBasePath' in adapter && typeof adapter.getBasePath === 'function') {
+				const basePath = adapter.getBasePath();
+				const separator = basePath.endsWith('/') || basePath.endsWith('\\') ? '' : '/';
+				const fullPath = basePath + separator + iconsFolderRelativePath;
+
+				const electron = (window as any).require?.('electron');
+				if (!electron?.shell) {
+					throw new Error('Electron shell API is not available');
+				}
+
+				const { shell } = electron;
+				const result = await shell.openPath(fullPath);
+
+				if (result) {
+					this.plugin.logger.warn('Could not open folder, copying path instead:', result);
+					await navigator.clipboard.writeText(fullPath);
+					new Notice(t('PATH_COPIED', { path: fullPath }));
+				} else {
+					new Notice(t('FOLDER_CREATED', { path: iconsFolderRelativePath }));
+				}
+			} else {
+				await navigator.clipboard.writeText(iconsFolderRelativePath);
+				new Notice(t('PATH_COPIED', { path: iconsFolderRelativePath }));
+			}
+
         } catch (error) {
             this.plugin.logger.error('Error opening icons folder:', error);
             new Notice(t('ERROR_RELOADING'));
