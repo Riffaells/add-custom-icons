@@ -7,7 +7,7 @@ export default {
 	ICONS_MANAGEMENT_TITLE: "Icons Management",
 	FOLDER_PATH: "Icons Folder",
 	FOLDER_DESC: "Path to SVG icons folder",
-	COPY_FOLDER_PATH: "Copy Folder Path",
+	OPEN_FOLDER: "Open Folder",
 	RELOAD_ICONS: "Reload Icons",
 	ICONS_LOADED: "Icons loaded: {count}",
 	FOLDER_CREATED: "Folder created. Path copied: {path}",
@@ -84,7 +84,8 @@ export default {
 	
 	// Commands
 	COMMAND_RELOAD_ICONS: "Reload Custom Icons",
-	
+	COMMAND_MEMORY_STATS: "Show Icon Memory Statistics",
+
 	// Notices
 	LOADING_IN_PROGRESS: "Icon loading already in progress",
 	STARTING_RELOAD: "Starting icon reload...",

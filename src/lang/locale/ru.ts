@@ -7,7 +7,7 @@ export default {
 	ICONS_MANAGEMENT_TITLE: "Управление иконками",
 	FOLDER_PATH: "Папка с иконками",
 	FOLDER_DESC: "Путь к папке с SVG иконками",
-	COPY_FOLDER_PATH: "Копировать путь к папке",
+	OPEN_FOLDER: "Открыть папку",
 	RELOAD_ICONS: "Перезагрузить иконки",
 	ICONS_LOADED: "Загружено иконок: {count}",
 	FOLDER_CREATED: "Папка создана. Путь скопирован: {path}",
@@ -84,6 +84,7 @@ export default {
 	
 	// Commands
 	COMMAND_RELOAD_ICONS: "Перезагрузить пользовательские иконки",
+	COMMAND_MEMORY_STATS: "Показать статистику памяти иконок",
 	
 	// Notices
 	LOADING_IN_PROGRESS: "Загрузка иконок уже выполняется",

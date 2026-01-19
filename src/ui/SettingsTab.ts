@@ -1,4 +1,4 @@
-import { App, PluginSettingTab, Setting, ButtonComponent, Notice, Modal, TextComponent, setIcon } from 'obsidian';
+import { App, PluginSettingTab, Setting, ButtonComponent, Notice, Modal, TextComponent, setIcon, ExtraButtonComponent } from 'obsidian';
 import AddCustomIconsPlugin from '../../main';
 import { IconCacheEntry } from '../types';
 import { t } from '../lang/helpers';
@@ -47,8 +47,8 @@ export class AddCustomIconsSettingTab extends PluginSettingTab {
         const actionsContainer = section.createEl('div', { cls: 'icon-actions' });
 
         new ButtonComponent(actionsContainer)
-            .setButtonText(t('COPY_FOLDER_PATH'))
-            .setIcon('copy')
+            .setButtonText(t('OPEN_FOLDER'))
+            .setIcon('folder')
             .onClick(() => this.openIconsFolder());
 
         new ButtonComponent(actionsContainer)
@@ -168,21 +168,33 @@ export class AddCustomIconsSettingTab extends PluginSettingTab {
                 await this.app.vault.adapter.mkdir(iconsFolderRelativePath);
             }
 
-            // Get the full path and copy to clipboard
+            // Open folder in system file explorer
             const adapter = this.app.vault.adapter;
             if ('getBasePath' in adapter && typeof adapter.getBasePath === 'function') {
                 const basePath = adapter.getBasePath();
                 const separator = basePath.endsWith('/') || basePath.endsWith('\\') ? '' : '/';
                 const fullPath = basePath + separator + iconsFolderRelativePath;
                 
-                await navigator.clipboard.writeText(fullPath);
-                new Notice(t('PATH_COPIED', { path: fullPath }));
+                // Using require is the standard way in Obsidian plugins to access Electron APIs
+                // eslint-disable-next-line @typescript-eslint/no-var-requires
+                const { shell } = require('electron');
+                const result = await shell.openPath(fullPath);
+                
+                if (result) {
+                    // If there was an error opening the path
+                    this.plugin.logger.warn('Could not open folder, copying path instead:', result);
+                    await navigator.clipboard.writeText(fullPath);
+                    new Notice(t('PATH_COPIED', { path: fullPath }));
+                } else {
+                    new Notice(t('FOLDER_CREATED', { path: iconsFolderRelativePath }));
+                }
             } else {
+                // Fallback: copy path to clipboard
                 await navigator.clipboard.writeText(iconsFolderRelativePath);
                 new Notice(t('PATH_COPIED', { path: iconsFolderRelativePath }));
             }
         } catch (error) {
-            this.plugin.logger.error('Error accessing icons folder:', error);
+            this.plugin.logger.error('Error opening icons folder:', error);
             new Notice(t('ERROR_RELOADING'));
         }
     }
@@ -227,7 +239,7 @@ class IconsBrowserModal extends Modal {
 
         const filterIcons = (filter: string = '') => {
             const cache = this.plugin.iconCache;
-            const entries = Object.entries(cache).filter(([path, entry]) => path !== '_cacheVersion');
+            const entries = Object.entries(cache).filter(([path]) => path !== '_cacheVersion');
             
             this.filteredEntries = entries.filter((item): item is [string, IconCacheEntry] => {
                 const [path, entry] = item;
@@ -261,7 +273,7 @@ class IconsBrowserModal extends Modal {
 
         if (batch.length === 0) return;
 
-        batch.forEach(([path, entry]) => {
+        batch.forEach(([, entry]) => {
             // @ts-ignore
             const iconId = entry.iconId;
             const iconItem = this.grid.createEl('div', { 
@@ -480,25 +492,24 @@ class ColorsManager {
             const tagText = tagEl.createSpan({ text: color });
             tagText.addClass("tag-text");
 
-            const editBtn = tagEl.createEl("button", {
-                cls: "tag-action-btn",
-                attr: { "aria-label": `Edit ${color}` },
-            });
-            setIcon(editBtn, "pencil");
-            editBtn.addEventListener("click", (e) => {
-                e.stopPropagation();
-                this.startEdit(color);
-            });
+            const editBtn = new ExtraButtonComponent(tagEl)
+                .setIcon("pencil")
+                .setTooltip(`Edit ${color}`)
+                .onClick(() => this.startEdit(color));
+            editBtn.extraSettingsEl.addClass("tag-action-btn");
 
-            const removeBtn = tagEl.createEl("button", {
-                cls: "tag-action-btn tag-remove-btn",
-                attr: { "aria-label": `Remove ${color}` },
-            });
-            removeBtn.textContent = "×";
-            removeBtn.addEventListener("click", (e) => {
-                e.stopPropagation();
-                this.removeColor(color);
-            });
+            const removeBtn = new ExtraButtonComponent(tagEl)
+                .setIcon("cross")
+                .setTooltip(`Remove ${color}`)
+                .onClick(async () => {
+                    try {
+                        await this.removeColor(color);
+                    } catch (error) {
+                        new Notice("Failed to remove color");
+                        console.error(error);
+                    }
+                });
+            removeBtn.extraSettingsEl.addClass("tag-action-btn", "tag-remove-btn");
         }
     }
 

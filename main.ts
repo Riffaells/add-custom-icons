@@ -23,11 +23,10 @@ export default class AddCustomIconsPlugin extends Plugin {
 			await this.loadSettings();
 			this.logger = new Logger(this.settings.debugMode, 'AddCustomIcons');
 			this.initializeServices();
-			this.initializeIconCache();
+			await this.initializeIconCache();
 			this.registerCommands();
 			this.addSettingTab(new AddCustomIconsSettingTab(this.app, this));
-			
-			// Запускаем фоновую загрузку
+
 			this.scheduleBackgroundIconLoad();
 		} catch (error) {
 			this.logger.error('Failed to load Add Custom Icons plugin:', error);
@@ -51,10 +50,10 @@ export default class AddCustomIconsPlugin extends Plugin {
 		}
 	}
 
-	private initializeIconCache(): void {
+	private async initializeIconCache(): Promise<void> {
 		if (this.iconCache._cacheVersion === CONFIG.CACHE_VERSION) {
 			this.logger.debug(`Loaded icon cache with ${Object.keys(this.iconCache).length - 1} entries`);
-			this.iconLoader.restoreIconsFromCache(this.iconCache, this.settings.monochromeColors);
+			await this.iconLoader.restoreIconsFromCache(this.iconCache, this.settings.monochromeColors);
 		} else {
 			this.logger.debug('Cache version mismatch or no cache found, will create new cache');
 			this.iconCache = { _cacheVersion: CONFIG.CACHE_VERSION };
@@ -70,7 +69,7 @@ export default class AddCustomIconsPlugin extends Plugin {
 
 		this.addCommand({
 			id: 'show-icon-memory-stats',
-			name: 'Show Icon Memory Statistics',
+			name: t('COMMAND_MEMORY_STATS'),
 			callback: () => this.showMemoryStats()
 		});
 	}
@@ -111,7 +110,6 @@ export default class AddCustomIconsPlugin extends Plugin {
 			this.iconCache = cacheData as IconCache;
 		} else {
 			this.settings = Object.assign({}, DEFAULT_SETTINGS, data || {});
-			// Ensure selectedPlugins is an array on first load
 			if (!this.settings.selectedPlugins) {
 				this.settings.selectedPlugins = [];
 			}

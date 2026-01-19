@@ -62,9 +62,10 @@ export class IconLoader {
 		}
 	}
 
-	restoreIconsFromCache(iconCache: IconCache, monochromeColors: string): number {
+	async restoreIconsFromCache(iconCache: IconCache, monochromeColors: string): Promise<number> {
 		this.monochromeColors = monochromeColors;
 		let restoredCount = 0;
+		const promises: Promise<void>[] = [];
 
 		for (const key in iconCache) {
 			if (key === '_cacheVersion') continue;
@@ -72,10 +73,12 @@ export class IconLoader {
 			const cachedIcon = iconCache[key] as IconCacheEntry;
 			if (cachedIcon?.iconId) {
 				// Загружаем иконку из файла (так как SVG не в кэше)
-				this.loadIconFromFile(cachedIcon.iconId, key);
+				promises.push(this.loadIconFromFile(cachedIcon.iconId, key));
 				restoredCount++;
 			}
 		}
+
+		await Promise.all(promises);
 
 		this.logger.debug(`Restored ${restoredCount} icons from cache`);
 		return restoredCount;
@@ -87,7 +90,12 @@ export class IconLoader {
 			const svgContent = HelperUtils.normalizeSvgContent(rawSvgContent, this.monochromeColors);
 			addIcon(iconId, svgContent);
 		} catch (error) {
-			this.logger.debug(`Failed to load icon ${iconId} from ${iconPath}:`, error);
+			const err = error as { code?: string, message?: string };
+			if (err?.code === 'ENOENT' || err?.message?.includes('ENOENT')) {
+				this.logger.debug(`Icon file not found (likely deleted): ${iconPath}`);
+				return;
+			}
+			this.logger.warn(`Failed to read icon file: ${iconPath}. It may be inaccessible or corrupted.`, error);
 		}
 	}
 

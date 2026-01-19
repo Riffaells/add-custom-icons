@@ -13,7 +13,14 @@ const locale = localeMap[moment.locale()];
 
 function interpolate(str: string, params: Record<string, unknown>): string {
     return str.replace(/\{(\w+)}/g, (match, key) => {
-        return params[key] !== undefined ? String(params[key]) : match;
+        const value = params[key];
+        if (value === undefined || value === null) {
+            return match;
+        }
+        if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+            return String(value);
+        }
+        return JSON.stringify(value);
     });
 }
 
