@@ -100,12 +100,15 @@ export default class AddCustomIconsPlugin extends Plugin {
 		const data = await this.loadData();
 
 		if (data && data._cacheVersion) {
-			const { enableAutoRestart, restartTarget, selectedPlugins, debugMode, ...cacheData } = data;
+			const { enableAutoRestart, restartTarget, selectedPlugins, debugMode, monochromeColors, lazyLoadIcons, maxLoadedIcons, ...cacheData } = data;
 			this.settings = Object.assign({}, DEFAULT_SETTINGS, {
 				enableAutoRestart,
 				restartTarget,
 				selectedPlugins: selectedPlugins || [], // Fallback to empty array
-				debugMode
+				debugMode,
+				monochromeColors,
+				lazyLoadIcons,
+				maxLoadedIcons
 			});
 			this.iconCache = cacheData as IconCache;
 		} else {

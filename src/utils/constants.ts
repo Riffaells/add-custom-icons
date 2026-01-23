@@ -18,7 +18,7 @@ export const DEFAULT_SETTINGS: AddCustomIconsSettings = {
 	debugMode: false,
 	lazyLoadIcons: true,
 	maxLoadedIcons: 500,
-	monochromeColors: '#000000,#000,black,#ffffff,#fff,white,#1C274C'
+	monochromeColors: '#000000,#000,black,#ffffff,#fff,white,#1C274C,#1C274D'
 };
 
 export const REGEX = {
