@@ -10,9 +10,9 @@ icons
 # npm
 node_modules
 
-# Don't include the compiled main.js file in the repo.
-# They should be uploaded to GitHub releases instead.
-main.js
+# Build output — uploaded to GitHub releases, not committed
+build/
+
 
 # Exclude sourcemaps
 *.map
