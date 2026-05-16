@@ -9,11 +9,12 @@ export const localeMap: { [k: string]: Partial<typeof en> } = {
    ru
 };
 
+// Use moment.locale() for language detection (obsidian sets this to the user's language)
 const locale = localeMap[moment.locale()];
 
 function interpolate(str: string, params: Record<string, unknown>): string {
     return str.replace(/\{(\w+)}/g, (match, key) => {
-        const value = params[key];
+        const value = params[key as string];
         if (value === undefined || value === null) {
             return match;
         }
@@ -25,10 +26,6 @@ function interpolate(str: string, params: Record<string, unknown>): string {
 }
 
 export function t(str: keyof typeof en, params?: Record<string, unknown>): string {
-    if (!locale) {
-        console.error(`AddCustomIcons error: Locale ${moment.locale()} not found.`);
-    }
-
     const result = (locale && locale[str]) || en[str] || str;
 
     if (params) {
