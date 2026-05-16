@@ -31,6 +31,8 @@ export class ColorsManager {
             .setName(this.title)
             .setDesc(this.description);
 
+        setting.settingEl.addClass('has-tags-manager');
+
         const controlsContainer = setting.controlEl.createDiv('tags-manager-controls');
         
         this.createInputRow(controlsContainer);

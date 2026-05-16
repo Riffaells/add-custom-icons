@@ -148,7 +148,7 @@
 }
 
 /* Colors Manager (Simplified) */
-.setting-item:has(.tags-manager-controls) { flex-direction: column; align-items: stretch; }
+.setting-item.has-tags-manager { flex-direction: column; align-items: stretch; }
 
 .tags-input-row { display: flex; gap: 8px; margin-bottom: 8px; }
 .tags-input-wrapper { flex: 1; }
