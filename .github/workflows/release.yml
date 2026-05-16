@@ -1,0 +1,58 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build plugin
+        run: npm run build
+
+      - name: Verify tag and manifest version
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME}"
+          MANIFEST_VERSION=$(node -p "require('./manifest.json').version")
+
+          # semver check
+          if ! [[ "$TAG_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "❌ Tag is not semver: $TAG_VERSION"
+            exit 1
+          fi
+
+          # manifest match
+          if [ "$TAG_VERSION" != "$MANIFEST_VERSION" ]; then
+            echo "❌ Tag ($TAG_VERSION) does not match manifest.json ($MANIFEST_VERSION)"
+            exit 1
+          fi
+
+          echo "✅ Version confirmed: $TAG_VERSION"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "${{ github.ref_name }}"
+          files: |
+            build/main.js
+            build/manifest.json
+            build/styles.css
