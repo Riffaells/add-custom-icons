@@ -2,9 +2,11 @@ import { REGEX, CONFIG } from './constants';
 import { IconFile } from '../types';
 
 export class HelperUtils {
+	private static colorRegexCache = new Map<string, RegExp>();
+
 	static generateIconId(icon: IconFile): string {
 		const iconFileNameWithoutExtension = icon.name.substring(0, icon.name.lastIndexOf('.'));
-		let iconId = icon.prefix ?
+		const iconId = icon.prefix ?
 			`${icon.prefix}${CONFIG.ID_SEPARATOR}${iconFileNameWithoutExtension}` :
 			iconFileNameWithoutExtension;
 
@@ -19,9 +21,17 @@ export class HelperUtils {
 		
 		// Replace user-defined monochrome colors with currentColor
 		if (monochromeColors) {
-			const colors = monochromeColors.split(',').map(c => c.trim()).filter(c => c.length > 0);
-			if (colors.length > 0) {
-				const colorsRegex = new RegExp(`(fill|stroke)="(${colors.join('|')})"`, 'gi');
+			let colorsRegex = this.colorRegexCache.get(monochromeColors);
+			
+			if (!colorsRegex) {
+				const colors = monochromeColors.split(',').map(c => c.trim()).filter(c => c.length > 0);
+				if (colors.length > 0) {
+					colorsRegex = new RegExp(`(fill|stroke)="(${colors.join('|')})"`, 'gi');
+					this.colorRegexCache.set(monochromeColors, colorsRegex);
+				}
+			}
+			
+			if (colorsRegex) {
 				svgContent = svgContent.replace(colorsRegex, '$1="currentColor"');
 			}
 		}
@@ -50,7 +60,7 @@ export class HelperUtils {
 			results.push(result);
 
 			// Yield to the main thread to keep the UI responsive
-			await new Promise(resolve => setTimeout(resolve, 0));
+			await new Promise(resolve => activeWindow.setTimeout(resolve, 0));
 		}
 
 		return results;

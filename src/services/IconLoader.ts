@@ -11,6 +11,8 @@ export class IconLoader {
 	private _oldCache: IconCache;
 	private iconCache: IconCache;
 	private monochromeColors: string = "";
+	private iconsPathType: 'plugin' | 'vault' | 'custom' = 'plugin';
+	private customIconsPath: string = "";
 
 	constructor(app: App, manifestDir: string, logger: Logger) {
 		this.app = app;
@@ -18,8 +20,22 @@ export class IconLoader {
 		this.logger = logger;
 	}
 
+	/**
+	 * Sets the icons path configuration
+	 */
+	setIconsPath(pathType: 'plugin' | 'vault' | 'custom', customPath: string = ''): void {
+		this.iconsPathType = pathType;
+		this.customIconsPath = customPath;
+	}
 
 
+
+	/**
+	 * Loads icons from the icons folder and updates the cache
+	 * @param iconCache - Current icon cache with metadata
+	 * @param monochromeColors - Comma-separated list of colors to convert to currentColor
+	 * @returns Object containing loaded count, changed count, and updated cache
+	 */
 	async loadIcons(iconCache: IconCache, monochromeColors: string): Promise<{
 		loadedCount: number;
 		changedCount: number;
@@ -62,6 +78,12 @@ export class IconLoader {
 		}
 	}
 
+	/**
+	 * Restores icons from cache by loading them from disk
+	 * @param iconCache - Icon cache with metadata
+	 * @param monochromeColors - Comma-separated list of colors to convert
+	 * @returns Number of icons restored
+	 */
 	async restoreIconsFromCache(iconCache: IconCache, monochromeColors: string): Promise<number> {
 		this.monochromeColors = monochromeColors;
 		let restoredCount = 0;
@@ -95,7 +117,7 @@ export class IconLoader {
 				this.logger.debug(`Icon file not found (likely deleted): ${iconPath}`);
 				return;
 			}
-			this.logger.warn(`Failed to read icon file: ${iconPath}. It may be inaccessible or corrupted.`, error);
+			this.logger.warn(`Failed to read icon file: ${iconPath}. It may be inaccessible or corrupted.`);
 		}
 	}
 
@@ -112,7 +134,21 @@ export class IconLoader {
 		if (!this.manifestDir) {
 			throw new Error('Plugin directory not found');
 		}
-		return `${this.manifestDir}/${CONFIG.ICONS_FOLDER}`;
+		
+		switch (this.iconsPathType) {
+			case 'plugin':
+				return `${this.manifestDir}/${CONFIG.ICONS_FOLDER}`;
+			case 'vault':
+				return `.obsidian/${CONFIG.ICONS_FOLDER}`;
+			case 'custom':
+				if (!this.customIconsPath) {
+					return 'icons/';
+				}
+				// Убираем trailing slash если есть, чтобы избежать двойных слешей
+				return this.customIconsPath.replace(/\/$/, '');
+			default:
+				return `${this.manifestDir}/${CONFIG.ICONS_FOLDER}`;
+		}
 	}
 
 	private async checkFolderExists(folderPath: string): Promise<boolean> {
@@ -211,8 +247,9 @@ export class IconLoader {
 		data?: IconCacheEntry;
 		fileStat?: FileStat;
 	}> {
-		const fileStat = await this.app.vault.adapter.stat(icon.path);
-		const cachedIcon = iconCache[icon.path] as IconCacheEntry;
+		const rawStat = await this.app.vault.adapter.stat(icon.path);
+		const fileStat: FileStat | undefined = rawStat ? { mtime: rawStat.mtime, size: rawStat.size } : undefined;
+		const cachedIcon = iconCache[icon.path] as IconCacheEntry | undefined;
 
 		if (cachedIcon && fileStat &&
 			cachedIcon.mtime === fileStat.mtime &&
@@ -224,7 +261,7 @@ export class IconLoader {
 			};
 		}
 
-		return {useCache: false, fileStat: fileStat || undefined};
+		return {useCache: false, fileStat};
 	}
 
 	private async processNewIcon(icon: IconFile, fileStat: FileStat): Promise<{
@@ -282,9 +319,9 @@ export class IconLoader {
 		const subfolderPromises = folders.map(subfolderAbsolutePath => {
 			const folderName = subfolderAbsolutePath.substring(subfolderAbsolutePath.lastIndexOf('/') + 1);
 			const cleanedFolderName = HelperUtils.cleanFolderName(folderName);
-			const newPrefix = currentPrefix ?
-				`${currentPrefix}${CONFIG.ID_SEPARATOR}${cleanedFolderName}` :
-				cleanedFolderName;
+			const newPrefix = currentPrefix 
+				? [currentPrefix, cleanedFolderName].join(CONFIG.ID_SEPARATOR)
+				: cleanedFolderName;
 
 			return this.listIconsRecursive(subfolderAbsolutePath, newPrefix);
 		});

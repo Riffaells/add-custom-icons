@@ -7,8 +7,12 @@ export const CONFIG = {
 	ID_SEPARATOR: '_',
 	CACHE_VERSION: 2,
 	BACKGROUND_LOAD_DELAY: 3000,
-	MAX_LOADED_ICONS: 500,
-	LAZY_LOAD_ENABLED: true,
+	PLUGIN_RELOAD_DELAYS: {
+		BASE: 500,
+		INCREMENT: 100,
+		CYCLE: 100,
+		SUMMARY: 2000
+	}
 } as const;
 
 export const DEFAULT_SETTINGS: AddCustomIconsSettings = {
@@ -16,9 +20,9 @@ export const DEFAULT_SETTINGS: AddCustomIconsSettings = {
 	enableAutoRestart: false,
 	selectedPlugins: ['Iconic'],
 	debugMode: false,
-	lazyLoadIcons: true,
-	maxLoadedIcons: 500,
-	monochromeColors: '#000000,#000,black,#ffffff,#fff,white,#1C274C,#1C274D'
+	monochromeColors: '#000000,#000,black,#ffffff,#fff,white,#1C274C,#1C274D',
+	iconsPathType: 'plugin',
+	customIconsPath: ''
 };
 
 export const REGEX = {
