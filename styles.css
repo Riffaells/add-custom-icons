@@ -17,6 +17,26 @@
     border-bottom: 1px solid var(--background-modifier-border);
 }
 
+/* Setting Item Icons */
+.setting-item-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    margin-right: 8px;
+    color: var(--text-muted);
+}
+
+.setting-item-icon svg {
+    width: 16px;
+    height: 16px;
+}
+
+.setting-item-heading .setting-item-icon {
+    color: var(--text-accent);
+}
+
 .icon-actions {
     display: flex;
     flex-wrap: wrap;
@@ -80,7 +100,7 @@
 
 .icon-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
     gap: 16px;
     margin-top: 16px;
     max-height: 60vh;
@@ -116,9 +136,15 @@
     color: var(--text-normal);
     text-align: center;
     width: 100%;
-    white-space: nowrap;
+    word-break: break-word;
+    overflow-wrap: break-word;
+    hyphens: auto;
+    line-height: 1.2;
+    max-height: 2.4em; /* 2 lines max */
     overflow: hidden;
-    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
 }
 
 /* Colors Manager (Simplified) */

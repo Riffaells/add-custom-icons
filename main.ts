@@ -17,8 +17,6 @@ export default class AddCustomIconsPlugin extends Plugin {
 	loadedIconsCount = 0;
 
 	async onload(): Promise<void> {
-		console.debug('Loading Add Custom Icons plugin');
-
 		try {
 			await this.loadSettings();
 			this.logger = new Logger(this.settings.debugMode, 'AddCustomIcons');
@@ -51,6 +49,9 @@ export default class AddCustomIconsPlugin extends Plugin {
 	}
 
 	private async initializeIconCache(): Promise<void> {
+		// Устанавливаем путь к иконкам
+		this.iconLoader.setIconsPath(this.settings.iconsPathType, this.settings.customIconsPath);
+		
 		if (this.iconCache._cacheVersion === CONFIG.CACHE_VERSION) {
 			this.logger.debug(`Loaded icon cache with ${Object.keys(this.iconCache).length - 1} entries`);
 			await this.iconLoader.restoreIconsFromCache(this.iconCache, this.settings.monochromeColors);
@@ -86,35 +87,40 @@ export default class AddCustomIconsPlugin extends Plugin {
 	}
 
 	private scheduleBackgroundIconLoad(): void {
-		// Добавляем проверку чтобы избежать множественных загрузок
-		if (this.isLoading) {
-			return;
-		}
-		
-		setTimeout(() => {
+		activeWindow.setTimeout(() => {
+			if (this.isLoading) {
+				this.logger.debug('Icon loading already in progress, skipping scheduled load');
+				return;
+			}
 			void this.loadIconsInBackground();
 		}, CONFIG.BACKGROUND_LOAD_DELAY);
 	}
 
 	async loadSettings(): Promise<void> {
-		const data = await this.loadData();
+		const data = await this.loadData() as Record<string, unknown> | null;
 
-		if (data && data._cacheVersion) {
-			const { enableAutoRestart, restartTarget, selectedPlugins, debugMode, monochromeColors, lazyLoadIcons, maxLoadedIcons, ...cacheData } = data;
+		if (data && typeof data._cacheVersion === 'number') {
+			const { enableAutoRestart, restartTarget, selectedPlugins, debugMode, monochromeColors, iconsPathType, customIconsPath, ...cacheData } = data;
 			this.settings = Object.assign({}, DEFAULT_SETTINGS, {
 				enableAutoRestart,
 				restartTarget,
-				selectedPlugins: selectedPlugins || [], // Fallback to empty array
+				selectedPlugins: (selectedPlugins as string[]) || [],
 				debugMode,
 				monochromeColors,
-				lazyLoadIcons,
-				maxLoadedIcons
+				iconsPathType: (iconsPathType as 'plugin' | 'vault' | 'custom') || 'plugin',
+				customIconsPath: (customIconsPath as string) || ''
 			});
-			this.iconCache = cacheData as IconCache;
+			this.iconCache = cacheData as unknown as IconCache;
 		} else {
 			this.settings = Object.assign({}, DEFAULT_SETTINGS, data || {});
 			if (!this.settings.selectedPlugins) {
 				this.settings.selectedPlugins = [];
+			}
+			if (!this.settings.iconsPathType) {
+				this.settings.iconsPathType = 'plugin';
+			}
+			if (!this.settings.customIconsPath) {
+				this.settings.customIconsPath = '';
 			}
 		}
 	}
@@ -134,6 +140,9 @@ export default class AddCustomIconsPlugin extends Plugin {
 		this.isLoading = true;
 
 		try {
+			// Обновляем путь к иконкам перед загрузкой
+			this.iconLoader.setIconsPath(this.settings.iconsPathType, this.settings.customIconsPath);
+			
 			const result = await this.iconLoader.loadIcons(this.iconCache, this.settings.monochromeColors);
 			this.iconCache = result.newCache;
 			this.loadedIconsCount = result.loadedCount;
@@ -162,6 +171,9 @@ export default class AddCustomIconsPlugin extends Plugin {
 
 		try {
 			this.isLoading = true;
+			// Обновляем путь к иконкам перед загрузкой
+			this.iconLoader.setIconsPath(this.settings.iconsPathType, this.settings.customIconsPath);
+			
 			const result = await this.iconLoader.loadIcons(this.iconCache, this.settings.monochromeColors);
 			this.iconCache = result.newCache;
 			this.loadedIconsCount = result.loadedCount;
