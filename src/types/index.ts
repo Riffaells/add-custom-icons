@@ -3,9 +3,9 @@ export interface AddCustomIconsSettings {
 	enableAutoRestart: boolean;
 	selectedPlugins: string[];
 	debugMode: boolean;
-	lazyLoadIcons: boolean;
-	maxLoadedIcons: number;
 	monochromeColors: string;
+	iconsPathType: 'plugin' | 'vault' | 'custom';
+	customIconsPath: string;
 }
 
 export interface IconCache {
