@@ -1,6 +1,6 @@
 {
 	"name": "add-custom-icons",
-	"version": "1.0.8",
+	"version": "1.0.9",
 	"description": "Load custom SVG icons from icons folder and restart plugins automatically",
 	"main": "main.js",
 	"scripts": {
