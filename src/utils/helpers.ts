@@ -136,7 +136,7 @@ export class HelperUtils {
 			// Yield to the main thread every N items to keep the UI responsive
 			// without creating thousands of unnecessary macrotasks
 			if ((i + 1) % yieldEvery === 0) {
-				await new Promise(resolve => activeWindow.setTimeout(resolve, 0));
+				await new Promise(resolve => window.setTimeout(resolve, 0));
 			}
 		}
 

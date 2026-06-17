@@ -1,7 +1,6 @@
 import { Plugin, Notice } from 'obsidian';
 import { AddCustomIconsSettings, IconCache, IconCacheEntry } from './src/types';
-import { DEFAULT_SETTINGS, CONFIG } from './src/utils/constants';
-import { IconLoader } from './src/services/IconLoader';
+import { DEFAULT_SETTINGS, CONFIG } from './src/utils/constants';import { IconLoader } from './src/services/IconLoader';
 import { PluginManager } from './src/services/PluginManager';
 import { AddCustomIconsSettingTab } from './src/ui/SettingsTab';
 import { Logger } from './src/utils/logger';
@@ -62,15 +61,13 @@ export default class AddCustomIconsPlugin extends Plugin {
 
 	onunload(): void {
 		this.logger.debug('Unloading Add Custom Icons plugin');
-		// Remove all registered custom icons from Obsidian's icon registry
-		// to prevent stale icons from lingering in memory until app restart.
+		// Remove all registered custom icons from Obsidian's internal registry
+		// to prevent stale icons lingering in memory until app restart.
 		for (const key in this.iconCache) {
 			if (key === '_cacheVersion') continue;
 			const entry = this.iconCache[key] as IconCacheEntry;
 			if (entry?.iconId) {
-				// Obsidian stores custom icons in an internal map; remove them directly.
-				// eslint-disable-next-line @typescript-eslint/no-explicit-any
-				(this.app as any).customIcons?.delete(entry.iconId);
+				this.removeCustomIcon(entry.iconId);
 			}
 		}
 	}
@@ -78,6 +75,10 @@ export default class AddCustomIconsPlugin extends Plugin {
 	private initializeServices(): void {
 		this.iconLoader = new IconLoader(this.app, this.manifest.dir || '', this.logger);
 		this.pluginManager = new PluginManager(this.app, this.manifest.id, this.logger);
+	}
+
+	private removeCustomIcon(iconId: string): void {
+		this.app.customIcons?.delete(iconId);
 	}
 
 	private updateDebugMode(): void {
@@ -114,7 +115,7 @@ export default class AddCustomIconsPlugin extends Plugin {
 	private scheduleBackgroundIconLoad(): void {
 		// Store the timeout id and clear it on unload to avoid the callback
 		// firing on a disposed plugin.
-		const timeoutId = activeWindow.setTimeout(() => {
+		const timeoutId = window.setTimeout(() => {
 			if (this.isLoading) {
 				this.logger.debug('Icon loading already in progress, skipping scheduled load');
 				return;
@@ -122,7 +123,7 @@ export default class AddCustomIconsPlugin extends Plugin {
 			void this.loadIconsInBackground();
 		}, CONFIG.BACKGROUND_LOAD_DELAY);
 
-		this.register(() => activeWindow.clearTimeout(timeoutId));
+		this.register(() => window.clearTimeout(timeoutId));
 	}
 
 	async loadSettings(): Promise<void> {

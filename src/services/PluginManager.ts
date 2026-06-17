@@ -57,7 +57,7 @@ export class PluginManager {
 			}
 
 			this.logger.debug(`Found plugin: ${pluginId}, attempting reload`);
-			activeWindow.setTimeout(() => {
+			window.setTimeout(() => {
 				void (async () => {
 					try {
 						// Use the official (though internal) disable/enable cycle instead of
@@ -75,7 +75,7 @@ export class PluginManager {
 			}, CONFIG.PLUGIN_RELOAD_DELAYS.BASE + (index * CONFIG.PLUGIN_RELOAD_DELAYS.INCREMENT));
 		});
 
-		activeWindow.setTimeout(() => {
+		window.setTimeout(() => {
 			if (reloadedCount > 0 || failedCount > 0) {
 				this.logger.debug(`Plugin reload summary: ${reloadedCount} successful, ${failedCount} failed`);
 			}
@@ -89,7 +89,7 @@ export class PluginManager {
 		this.logger.debug('Triggering Obsidian restart');
 		new Notice('Restarting Obsidian...');
 
-		activeWindow.setTimeout(() => {
+		window.setTimeout(() => {
 			this.app.commands.executeCommandById('app:reload');
 		}, 1000);
 	}

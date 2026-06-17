@@ -187,7 +187,7 @@ export class IconLoader {
 
 			// Yield to the main thread between batches to keep UI responsive
 			if (i + CONCURRENCY < svgFiles.length) {
-				await new Promise(resolve => activeWindow.setTimeout(resolve, 0));
+				await new Promise(resolve => window.setTimeout(resolve, 0));
 			}
 		}
 

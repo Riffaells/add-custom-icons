@@ -1,3 +1,11 @@
+import 'obsidian';
+
+declare module 'obsidian' {
+	interface App {
+		customIcons?: Map<string, unknown>;
+	}
+}
+
 export interface AddCustomIconsSettings {
 	restartTarget: 'plugins' | 'obsidian' | 'none';
 	enableAutoRestart: boolean;
