@@ -1,4 +1,4 @@
-import { App, TFolder, TextComponent } from 'obsidian';
+import { App, TFolder, TextComponent, normalizePath } from 'obsidian';
 import { AbstractInputSuggest } from 'obsidian';
 
 /**
@@ -55,8 +55,10 @@ export class FolderSuggest extends AbstractInputSuggest<string> {
 
     /** Renders suggestion with folder name and full path */
     renderSuggestion(folder: string, el: HTMLElement): void {
-        const parts = folder.split('/');
-        const folderName = parts[parts.length - 1] || parts[parts.length - 2];
+        // Use normalizePath to ensure consistent separators before splitting
+        const normalized = normalizePath(folder);
+        const parts = normalized.split('/').filter(p => p.length > 0);
+        const folderName = parts[parts.length - 1] ?? normalized;
         
         el.empty();
         
@@ -68,7 +70,7 @@ export class FolderSuggest extends AbstractInputSuggest<string> {
         if (parts.length > 1) {
             el.createEl('div', { 
                 cls: 'suggestion-note',
-                text: folder 
+                text: normalized
             });
         }
     }

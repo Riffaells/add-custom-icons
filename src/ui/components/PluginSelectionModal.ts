@@ -18,18 +18,18 @@ export class PluginSelectionModal extends Modal {
         contentEl.addClass('plugin-selection-modal');
 
         new Setting(contentEl)
-            .setName(t('SELECT_PLUGINS_TITLE'))
+            .setName(t('settings.plugins.modalTitle'))
             .setHeading();
             
         contentEl.createEl('p', {
-            text: t('SELECT_PLUGINS_DESC'),
+            text: t('settings.plugins.modalDesc'),
             cls: 'setting-item-description'
         });
 
         const searchContainer = contentEl.createDiv({ cls: 'modal-search-container' });
         const searchInput = new TextComponent(searchContainer);
         searchInput.inputEl.addClass('modal-search-input');
-        searchInput.setPlaceholder(t('SEARCH_PLUGINS_PLACEHOLDER'));
+        searchInput.setPlaceholder(t('settings.plugins.searchPlaceholder'));
 
         const pluginListContainer = contentEl.createDiv({ cls: 'modal-plugin-list' });
         const installedPlugins = this.plugin.pluginManager.getInstalledPlugins();
@@ -37,7 +37,7 @@ export class PluginSelectionModal extends Modal {
 
         if (installedPlugins.length === 0) {
             pluginListContainer.createDiv({
-                text: t('NO_PLUGINS_FOUND'),
+                text: t('settings.plugins.notFound'),
                 cls: 'setting-item-description'
             });
         } else {
@@ -59,7 +59,7 @@ export class PluginSelectionModal extends Modal {
                         }));
                 
                 if (!pluginInfo.enabled) {
-                    setting.nameEl.append(` ${t('PLUGIN_DISABLED')}`);
+                    setting.nameEl.append(` ${t('settings.plugins.disabled')}`);
                     setting.settingEl.addClass('plugin-disabled');
                 }
                 pluginSettings.push(setting);
@@ -67,7 +67,7 @@ export class PluginSelectionModal extends Modal {
         }
 
         const noResultsEl = pluginListContainer.createDiv({
-            text: t('NO_RESULTS_FOUND'),
+            text: t('settings.plugins.noResults'),
             cls: 'setting-item-description'
         });
         noResultsEl.hide();
@@ -103,11 +103,11 @@ export class PluginSelectionModal extends Modal {
         const buttonContainer = contentEl.createDiv({ cls: 'modal-buttons' });
 
         new ButtonComponent(buttonContainer)
-            .setButtonText(t('CANCEL'))
+            .setButtonText(t('buttons.cancel'))
             .onClick(() => this.close());
 
         new ButtonComponent(buttonContainer)
-            .setButtonText(t('DONE'))
+            .setButtonText(t('buttons.done'))
             .setClass('mod-cta')
             .onClick(() => {
                 void this.plugin.saveSettings().then(() => {

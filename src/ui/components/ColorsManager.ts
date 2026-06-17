@@ -45,14 +45,14 @@ export class ColorsManager {
         const inputWrapper = inputRow.createDiv('tags-input-wrapper');
         
         this.inputComponent = new TextComponent(inputWrapper);
-        this.inputComponent.setPlaceholder(t('COLOR_INPUT_PLACEHOLDER'));
+        this.inputComponent.setPlaceholder(t('settings.colors.placeholder'));
         
         this.inputComponent.inputEl.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 e.preventDefault();
                 void (this.editingColor ? this.saveEdit() : this.addColor())
                     .catch(() => {
-                        new Notice(t('COLOR_OPERATION_FAILED'));
+                        new Notice(t('settings.colors.operationFailed'));
                     });
             } else if (e.key === 'Escape' && this.editingColor) {
                 this.cancelEdit();
@@ -63,7 +63,7 @@ export class ColorsManager {
         this.addButton.addEventListener('click', () => {
             void (this.editingColor ? this.saveEdit() : this.addColor())
                 .catch(() => {
-                    new Notice(t('COLOR_OPERATION_FAILED'));
+                    new Notice(t('settings.colors.operationFailed'));
                 });
         });
         this.updateButtonText();
@@ -71,7 +71,7 @@ export class ColorsManager {
 
     private updateButtonText(): void {
         if (this.addButton) {
-            this.addButton.textContent = this.editingColor ? t('SAVE') : t('ADD');
+            this.addButton.textContent = this.editingColor ? t('buttons.save') : t('buttons.add');
         }
     }
 
@@ -86,10 +86,8 @@ export class ColorsManager {
             return true;
         }
         // Check if it's a named color (letters only)
-        if (/^[a-z]+$/i.test(color)) {
-            return true;
-        }
-        return false;
+        return /^[a-z]+$/i.test(color);
+
     }
 
     private renderColorsList(): void {
@@ -97,7 +95,7 @@ export class ColorsManager {
         
         if (this.colors.length === 0) {
             const emptyMsg = this.tagsListEl.createDiv('tags-empty-message');
-            emptyMsg.textContent = t('NO_COLORS_ADDED');
+            emptyMsg.textContent = t('settings.colors.empty');
             return;
         }
 
@@ -110,18 +108,18 @@ export class ColorsManager {
 
         const editBtn = new ExtraButtonComponent(tagEl)
             .setIcon('pencil')
-            .setTooltip(t('EDIT_COLOR_TOOLTIP', { color }))
+            .setTooltip(t('settings.colors.editTooltip', { color }))
             .onClick(() => this.startEdit(color));
         editBtn.extraSettingsEl.addClass('tag-action-btn');
 
         const removeBtn = new ExtraButtonComponent(tagEl)
             .setIcon('cross')
-            .setTooltip(t('REMOVE_COLOR_TOOLTIP', { color }))
+            .setTooltip(t('settings.colors.removeTooltip', { color }))
             .onClick(async () => {
                 try {
                     await this.removeColor(color);
                 } catch {
-                    new Notice(t('COLOR_REMOVE_FAILED'));
+                    new Notice(t('settings.colors.removeFailed'));
                 }
             });
         removeBtn.extraSettingsEl.addClass('tag-action-btn', 'tag-remove-btn');
@@ -146,17 +144,17 @@ export class ColorsManager {
         
         const newValue = this.inputComponent.getValue().trim();
         if (!newValue) {
-            new Notice(t('COLOR_EMPTY_ERROR'));
+            new Notice(t('settings.colors.emptyError'));
             return;
         }
 
         if (!this.isValidColor(newValue)) {
-            new Notice(t('COLOR_INVALID_FORMAT'));
+            new Notice(t('settings.colors.invalidFormat'));
             return;
         }
 
         if (this.colors.includes(newValue) && newValue !== this.editingColor) {
-            new Notice(t('COLOR_EXISTS_ERROR'));
+            new Notice(t('settings.colors.existsError'));
             return;
         }
 
@@ -174,13 +172,13 @@ export class ColorsManager {
         if (!color) return;
 
         if (!this.isValidColor(color)) {
-            new Notice(t('COLOR_INVALID_FORMAT'));
+            new Notice(t('settings.colors.invalidFormat'));
             this.inputComponent.setValue('');
             return;
         }
 
         if (this.colors.includes(color)) {
-            new Notice(t('COLOR_EXISTS_ERROR'));
+            new Notice(t('settings.colors.existsError'));
             this.inputComponent.setValue('');
             return;
         }

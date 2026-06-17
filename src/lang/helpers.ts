@@ -1,16 +1,23 @@
-// https://github.com/mgmeyers/obsidian-kanban/blob/93014c2512507fde9eafd241e8d4368a8dfdf853/src/lang/helpers.ts
-
 import { moment } from "obsidian";
 import en from "./locale/en";
 import ru from "./locale/ru";
 
-export const localeMap: { [k: string]: Partial<typeof en> } = {
+export const localeMap: { [k: string]: any } = {
    en,
    ru
 };
 
-// Use moment.locale() for language detection (obsidian sets this to the user's language)
 const locale = localeMap[moment.locale()];
+
+function getPath(obj: any, path: string): string | undefined {
+    const parts = path.split('.');
+    let current = obj;
+    for (const part of parts) {
+        if (current === undefined || current === null) return undefined;
+        current = current[part];
+    }
+    return typeof current === 'string' ? current : undefined;
+}
 
 function interpolate(str: string, params: Record<string, unknown>): string {
     return str.replace(/\{(\w+)}/g, (match, key) => {
@@ -18,15 +25,15 @@ function interpolate(str: string, params: Record<string, unknown>): string {
         if (value === undefined || value === null) {
             return match;
         }
-        if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-            return String(value);
-        }
-        return JSON.stringify(value);
+        return String(value);
     });
 }
 
-export function t(str: keyof typeof en, params?: Record<string, unknown>): string {
-    const result = (locale && locale[str]) || en[str] || str;
+/**
+ * Translation helper with support for nested keys (e.g. 'settings.title')
+ */
+export function t(path: string, params?: Record<string, unknown>): string {
+    const result = getPath(locale, path) || getPath(en, path) || path;
 
     if (params) {
         return interpolate(result, params);

@@ -1,8 +1,8 @@
-import { App, PluginSettingTab, Setting, ButtonComponent, Notice, setIcon, Platform } from 'obsidian';
+import { App, PluginSettingTab, Setting, ButtonComponent, Notice, setIcon, Platform, normalizePath } from 'obsidian';
 import AddCustomIconsPlugin from '../../main';
 import { t } from '../lang/helpers';
 import { IconsBrowserModal, PluginSelectionModal, ColorsManager } from './components';
-import { FolderSuggest } from './components/FolderSuggest';
+import { FolderSuggest } from './components';
 
 export class AddCustomIconsSettingTab extends PluginSettingTab {
 
@@ -19,7 +19,7 @@ export class AddCustomIconsSettingTab extends PluginSettingTab {
         containerEl.empty();
 
         new Setting(containerEl)
-            .setName(t('SETTINGS_TITLE'))
+            .setName(t('settings.title'))
             .setHeading();
 
         const mainContainer = containerEl.createDiv({ cls: 'settings-tab-container' });
@@ -42,17 +42,17 @@ export class AddCustomIconsSettingTab extends PluginSettingTab {
         const section = containerEl.createDiv({ cls: 'settings-section-card' });
         
         const heading = new Setting(section)
-            .setName(t('ICONS_MANAGEMENT_HEADER'))
+            .setName(t('settings.management.header'))
             .setHeading();
         heading.nameEl.prepend(this.createIconEl('palette'));
 
         new Setting(section)
-            .setName(t('ICONS_PATH_TYPE_NAME'))
-            .setDesc(t('ICONS_PATH_TYPE_DESC'))
+            .setName(t('settings.management.pathType.name'))
+            .setDesc(t('settings.management.pathType.desc'))
             .addDropdown(dropdown => dropdown
-                .addOption('plugin', t('PATH_TYPE_PLUGIN'))
-                .addOption('vault', t('PATH_TYPE_VAULT'))
-                .addOption('custom', t('PATH_TYPE_CUSTOM'))
+                .addOption('plugin', t('settings.management.pathType.plugin'))
+                .addOption('vault', t('settings.management.pathType.vault'))
+                .addOption('custom', t('settings.management.pathType.custom'))
                 .setValue(this.plugin.settings.iconsPathType)
                 .onChange(async (value: 'plugin' | 'vault' | 'custom') => {
                     this.plugin.settings.iconsPathType = value;
@@ -67,11 +67,11 @@ export class AddCustomIconsSettingTab extends PluginSettingTab {
 
         if (this.plugin.settings.iconsPathType === 'custom') {
             new Setting(section)
-                .setName(t('CUSTOM_PATH_NAME'))
-                .setDesc(t('CUSTOM_PATH_DESC'))
+                .setName(t('settings.management.customPath.name'))
+                .setDesc(t('settings.management.customPath.desc'))
                 .addText(text => {
                     text
-                        .setPlaceholder(t('CUSTOM_PATH_PLACEHOLDER'))
+                        .setPlaceholder(t('settings.management.customPath.placeholder'))
                         .setValue(this.plugin.settings.customIconsPath)
                         .onChange(async (value) => {
                             this.plugin.settings.customIconsPath = value.trim();
@@ -86,30 +86,30 @@ export class AddCustomIconsSettingTab extends PluginSettingTab {
 
         const currentPath = this.getCurrentIconsPath();
         new Setting(section)
-            .setName(t('FOLDER_PATH'))
-            .setDesc(`${t('FOLDER_DESC')}: ${currentPath}`);
+            .setName(t('settings.management.folder'))
+            .setDesc(`${t('settings.management.folderDesc')}: ${currentPath}`);
 
         const actionsContainer = section.createDiv({ cls: 'icon-actions' });
 
         new ButtonComponent(actionsContainer)
-            .setButtonText(t('OPEN_FOLDER'))
+            .setButtonText(t('settings.management.openFolder'))
             .onClick(() => { void this.openIconsFolder(); });
 
         new ButtonComponent(actionsContainer)
-            .setButtonText(t('RELOAD_ICONS'))
+            .setButtonText(t('settings.management.reloadIcons'))
             .onClick(async () => {
                 await this.plugin.reloadIcons();
                 this.display();
             });
         
         new ButtonComponent(actionsContainer)
-            .setButtonText(t('ICONS_BROWSER_HEADER'))
+            .setButtonText(t('browser.header'))
             .onClick(() => {
                 new IconsBrowserModal(this.app, this.plugin).open();
             });
 
         new Setting(section)
-            .setDesc(t('ICONS_LOADED', { count: this.plugin.loadedIconsCount }))
+            .setDesc(t('settings.management.loadedCount', { count: this.plugin.loadedIconsCount }))
             .setClass('loaded-icons-count-setting');
 
         const colors = this.plugin.settings.monochromeColors
@@ -119,8 +119,8 @@ export class AddCustomIconsSettingTab extends PluginSettingTab {
 
         new ColorsManager(
             section, 
-            t('MONOCHROME_COLORS_NAME'),
-            t('MONOCHROME_COLORS_DESC'),
+            t('settings.colors.name'),
+            t('settings.colors.desc'),
             colors,
             async (newColors) => {
                 this.plugin.settings.monochromeColors = newColors.join(',');
@@ -133,13 +133,13 @@ export class AddCustomIconsSettingTab extends PluginSettingTab {
         const section = containerEl.createDiv({ cls: 'settings-section-card' });
         
         const heading = new Setting(section)
-            .setName(t('AUTO_RESTART_HEADER'))
+            .setName(t('settings.restart.header'))
             .setHeading();
         heading.nameEl.prepend(this.createIconEl('refresh-cw'));
 
         new Setting(section)
-            .setName(t('ENABLE_AUTO_RESTART_NAME'))
-            .setDesc(t('ENABLE_AUTO_RESTART_DESC'))
+            .setName(t('settings.restart.enabled.name'))
+            .setDesc(t('settings.restart.enabled.desc'))
             .addToggle(toggle => toggle
                 .setValue(this.plugin.settings.enableAutoRestart)
                 .onChange(async (value) => {
@@ -148,12 +148,12 @@ export class AddCustomIconsSettingTab extends PluginSettingTab {
                 }));
 
         new Setting(section)
-            .setName(t('RESTART_TARGET_NAME'))
-            .setDesc(t('RESTART_TARGET_DESC'))
+            .setName(t('settings.restart.target.name'))
+            .setDesc(t('settings.restart.target.desc'))
             .addDropdown(dropdown => dropdown
-                .addOption('plugins', t('OPTIONS_PLUGINS'))
-                .addOption('obsidian', t('OPTIONS_OBSIDIAN'))
-                .addOption('none', t('OPTIONS_NONE'))
+                .addOption('plugins', t('options.plugins'))
+                .addOption('obsidian', t('options.obsidian'))
+                .addOption('none', t('options.none'))
                 .setValue(this.plugin.settings.restartTarget)
                 .onChange(async (value: 'plugins' | 'obsidian' | 'none') => {
                     this.plugin.settings.restartTarget = value;
@@ -166,12 +166,12 @@ export class AddCustomIconsSettingTab extends PluginSettingTab {
         const section = containerEl.createDiv({ cls: 'settings-section-card' });
         
         const heading = new Setting(section)
-            .setName(t('PLUGIN_SELECTION_HEADER'))
+            .setName(t('settings.plugins.header'))
             .setHeading();
         heading.nameEl.prepend(this.createIconEl('plug'));
 
         const description = section.createDiv({ cls: 'setting-item-description' });
-        description.setText(t('SELECTED_COUNT', { count: this.plugin.settings.selectedPlugins.length }));
+        description.setText(t('settings.plugins.selectedCount', { count: this.plugin.settings.selectedPlugins.length }));
 
         if (this.plugin.settings.selectedPlugins.length > 0) {
             const pluginsList = section.createDiv({ cls: 'selected-plugins-compact' });
@@ -186,7 +186,7 @@ export class AddCustomIconsSettingTab extends PluginSettingTab {
                 const removeBtn = pluginTag.createSpan({ 
                     cls: 'plugin-tag-remove', 
                     text: '×',
-                    attr: { 'aria-label': t('REMOVE_PLUGIN_TOOLTIP') }
+                    attr: { 'aria-label': t('settings.plugins.removeTooltip') }
                 });
                 removeBtn.onclick = async (e) => {
                     e.stopPropagation();
@@ -195,17 +195,17 @@ export class AddCustomIconsSettingTab extends PluginSettingTab {
                         this.display();
                     } catch (error) {
                         this.plugin.logger.error('Failed to remove plugin:', error);
-                        new Notice(t('ERROR_REMOVING_PLUGIN'));
+                        new Notice(t('notices.errorRemovingPlugin'));
                     }
                 };
             });
         }
 
         new Setting(section)
-            .setName(t('MANAGE_LIST'))
-            .setDesc(t('MANAGE_DESC'))
+            .setName(t('settings.plugins.manageList'))
+            .setDesc(t('settings.plugins.manageDesc'))
             .addButton(button => button
-                .setButtonText(t('CONFIGURE_PLUGINS'))
+                .setButtonText(t('settings.plugins.configure'))
                 .setClass('mod-cta')
                 .onClick(() => {
                     new PluginSelectionModal(this.app, this.plugin, () => this.display()).open();
@@ -215,7 +215,7 @@ export class AddCustomIconsSettingTab extends PluginSettingTab {
     private async removePlugin(pluginId: string): Promise<void> {
         this.plugin.settings.selectedPlugins = this.plugin.settings.selectedPlugins.filter(id => id !== pluginId);
         await this.plugin.saveSettings();
-        new Notice(t('PLUGIN_REMOVED'));
+        new Notice(t('notices.pluginRemoved'));
     }
 
     private async openIconsFolder(): Promise<void> {
@@ -234,13 +234,13 @@ export class AddCustomIconsSettingTab extends PluginSettingTab {
 
             const opened = await this.tryOpenInExplorer(fullPath);
             if (opened) {
-                new Notice(t('FOLDER_CREATED', { path: fullPath }));
+                new Notice(t('settings.management.folderCreated', { path: fullPath }));
             } else {
                 await this.copyPathToClipboard(fullPath);
             }
         } catch (error) {
             this.plugin.logger.error('Error opening icons folder:', error);
-            new Notice(t('ERROR_OPENING_FOLDER'));
+            new Notice(t('settings.management.errorOpening'));
         }
     }
 
@@ -285,19 +285,19 @@ export class AddCustomIconsSettingTab extends PluginSettingTab {
 
     private async copyPathToClipboard(path: string): Promise<void> {
         await navigator.clipboard.writeText(path);
-        new Notice(t('PATH_COPIED', { path }));
+        new Notice(t('settings.management.pathCopied', { path }));
     }
 
     private getCurrentIconsPath(): string {
         switch (this.plugin.settings.iconsPathType) {
             case 'plugin':
-                return `${this.plugin.manifest.dir}/icons`;
+                return normalizePath(`${this.plugin.manifest.dir}/icons`);
             case 'vault':
-                return `${this.app.vault.configDir}/icons`;
+                return normalizePath(`${this.app.vault.configDir}/icons`);
             case 'custom':
-                return this.plugin.settings.customIconsPath || 'icons/';
+                return normalizePath(this.plugin.settings.customIconsPath || 'icons');
             default:
-                return `${this.plugin.manifest.dir}/icons`;
+                return normalizePath(`${this.plugin.manifest.dir}/icons`);
         }
     }
 }

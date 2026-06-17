@@ -1,4 +1,4 @@
-import {App, addIcon} from 'obsidian';
+import {App, addIcon, normalizePath} from 'obsidian';
 import {IconFile, IconCache, IconCacheEntry, ProcessIconResult, FileStat} from '../types';
 import {CONFIG} from '../utils/constants';
 import {HelperUtils} from '../utils/helpers';
@@ -8,11 +8,15 @@ export class IconLoader {
 	private app: App;
 	private readonly manifestDir: string;
 	private logger: Logger;
-	private _oldCache: IconCache;
 	private iconCache: IconCache;
 	private monochromeColors: string = "";
 	private iconsPathType: 'plugin' | 'vault' | 'custom' = 'plugin';
 	private customIconsPath: string = "";
+	/**
+	 * Tracks paths whose icons are already registered in Obsidian.
+	 * Used to skip redundant disk reads when the cached entry is still valid.
+	 */
+	private registeredPaths = new Set<string>();
 
 	constructor(app: App, manifestDir: string, logger: Logger) {
 		this.app = app;
@@ -64,8 +68,10 @@ export class IconLoader {
 				return {loadedCount: 0, changedCount: 0, newCache: iconCache};
 			}
 
+			// Reset collision tracker before each full load pass
+			HelperUtils.resetIdRegistry();
 			const results = await this.processIconsInBatches(svgFiles, iconCache);
-			const {newCache, changedCount} = this.updateIconCache(results, iconCache);
+			const {newCache, changedCount} = this.updateIconCache(results);
 
 			return {
 				loadedCount: svgFiles.length,
@@ -86,38 +92,40 @@ export class IconLoader {
 	 */
 	async restoreIconsFromCache(iconCache: IconCache, monochromeColors: string): Promise<number> {
 		this.monochromeColors = monochromeColors;
-		let restoredCount = 0;
-		const promises: Promise<void>[] = [];
+		this.iconCache = iconCache;
+		const promises: Promise<boolean>[] = [];
 
 		for (const key in iconCache) {
 			if (key === '_cacheVersion') continue;
 
 			const cachedIcon = iconCache[key] as IconCacheEntry;
 			if (cachedIcon?.iconId) {
-				// Загружаем иконку из файла (так как SVG не в кэше)
 				promises.push(this.loadIconFromFile(cachedIcon.iconId, key));
-				restoredCount++;
 			}
 		}
 
-		await Promise.all(promises);
+		const results = await Promise.all(promises);
+		const restoredCount = results.filter(Boolean).length;
 
 		this.logger.debug(`Restored ${restoredCount} icons from cache`);
 		return restoredCount;
 	}
 
-	private async loadIconFromFile(iconId: string, iconPath: string): Promise<void> {
+	private async loadIconFromFile(iconId: string, iconPath: string): Promise<boolean> {
 		try {
 			const rawSvgContent = await this.app.vault.adapter.read(iconPath);
 			const svgContent = HelperUtils.normalizeSvgContent(rawSvgContent, this.monochromeColors);
 			addIcon(iconId, svgContent);
+			this.registeredPaths.add(iconPath);
+			return true;
 		} catch (error) {
 			const err = error as { code?: string, message?: string };
 			if (err?.code === 'ENOENT' || err?.message?.includes('ENOENT')) {
 				this.logger.debug(`Icon file not found (likely deleted): ${iconPath}`);
-				return;
+				return false;
 			}
 			this.logger.warn(`Failed to read icon file: ${iconPath}. It may be inaccessible or corrupted.`);
+			return false;
 		}
 	}
 
@@ -137,17 +145,13 @@ export class IconLoader {
 		
 		switch (this.iconsPathType) {
 			case 'plugin':
-				return `${this.manifestDir}/${CONFIG.ICONS_FOLDER}`;
+				return normalizePath(`${this.manifestDir}/${CONFIG.ICONS_FOLDER}`);
 			case 'vault':
-				return `.obsidian/${CONFIG.ICONS_FOLDER}`;
+				return normalizePath(`.obsidian/${CONFIG.ICONS_FOLDER}`);
 			case 'custom':
-				if (!this.customIconsPath) {
-					return 'icons/';
-				}
-				// Убираем trailing slash если есть, чтобы избежать двойных слешей
-				return this.customIconsPath.replace(/\/$/, '');
+				return normalizePath(this.customIconsPath || 'icons');
 			default:
-				return `${this.manifestDir}/${CONFIG.ICONS_FOLDER}`;
+				return normalizePath(`${this.manifestDir}/${CONFIG.ICONS_FOLDER}`);
 		}
 	}
 
@@ -169,18 +173,31 @@ export class IconLoader {
 	}
 
 	private async processIconsInBatches(svgFiles: IconFile[], iconCache: IconCache): Promise<ProcessIconResult[]> {
-		const results = await HelperUtils.runPromisesSequentiallyWithYielding(
-			svgFiles,
-			(icon) => this.processIcon(icon, iconCache)
-		);
+		// Process icons in a concurrency pool. stat() and read() are I/O-bound, so
+		// higher concurrency parallelizes filesystem ops without blocking the UI.
+		const CONCURRENCY = 16;
+		const results: (ProcessIconResult | { success: false })[] = [];
+
+		for (let i = 0; i < svgFiles.length; i += CONCURRENCY) {
+			const batch = svgFiles.slice(i, i + CONCURRENCY);
+			const batchResults = await Promise.all(
+				batch.map(icon => this.processIcon(icon, iconCache))
+			);
+			results.push(...batchResults);
+
+			// Yield to the main thread between batches to keep UI responsive
+			if (i + CONCURRENCY < svgFiles.length) {
+				await new Promise(resolve => activeWindow.setTimeout(resolve, 0));
+			}
+		}
+
 		return results.filter((result): result is ProcessIconResult => result.success);
 	}
 
-	private updateIconCache(results: ProcessIconResult[], oldCache: IconCache): {
+	private updateIconCache(results: ProcessIconResult[]): {
 		newCache: IconCache;
 		changedCount: number
 	} {
-		this._oldCache = oldCache;
 		const newIconCache: IconCache = {_cacheVersion: CONFIG.CACHE_VERSION};
 		let changedCount = 0;
 
@@ -208,8 +225,11 @@ export class IconLoader {
 		try {
 			const cacheResult = await this.checkIconCache(icon, iconCache);
 			if (cacheResult.useCache && cacheResult.iconId && cacheResult.data) {
-				// Загружаем иконку из файла (SVG не в кэше)
-				await this.loadIconFromFile(cacheResult.iconId, icon.path);
+				// Cache hit: only register the icon if it wasn't already loaded
+				// during restoreIconsFromCache, avoiding redundant read+parse.
+				if (!this.registeredPaths.has(icon.path)) {
+					await this.loadIconFromFile(cacheResult.iconId, icon.path);
+				}
 				return {
 					path: icon.path,
 					data: cacheResult.data,
@@ -226,6 +246,7 @@ export class IconLoader {
 			const processResult = await this.processNewIcon(icon, cacheResult.fileStat);
 			if (processResult.success) {
 				addIcon(processResult.iconId, processResult.svgContent);
+				this.registeredPaths.add(icon.path);
 				return {
 					path: icon.path,
 					data: processResult.cacheEntry,
@@ -279,8 +300,6 @@ export class IconLoader {
 			mtime: fileStat.mtime,
 			size: fileStat.size,
 			iconId: iconId,
-			isLoaded: false
-			// svgContent не сохраняем для экономии памяти
 		};
 
 		return {

@@ -19,7 +19,6 @@ export interface IconCacheEntry {
 	size: number;
 	iconId: string;
 	svgContent?: string;
-	isLoaded?: boolean;
 }
 
 export interface IconFile {

@@ -1,4 +1,4 @@
-import { App, Modal, Setting, TextComponent, setIcon } from 'obsidian';
+import { App, Modal, Notice, Setting, TextComponent, setIcon } from 'obsidian';
 import AddCustomIconsPlugin from '../../../main';
 import { IconCacheEntry } from '../../types';
 import { t } from '../../lang/helpers';
@@ -9,7 +9,7 @@ export class IconsBrowserModal extends Modal {
     private batchSize = 50;
     private filteredEntries: [string, IconCacheEntry][] = [];
     private grid: HTMLElement;
-    private scrollHandler: (() => void) | null = null;
+    private scrollAbortController: AbortController | null = null;
 
     constructor(app: App, plugin: AddCustomIconsPlugin) {
         super(app);
@@ -22,7 +22,7 @@ export class IconsBrowserModal extends Modal {
         contentEl.addClass('icons-browser-modal');
 
         new Setting(contentEl)
-            .setName(t('ICONS_BROWSER_HEADER'))
+            .setName(t('browser.header'))
             .setHeading();
 
         const searchContainer = contentEl.createDiv({ 
@@ -32,16 +32,18 @@ export class IconsBrowserModal extends Modal {
         
         const searchInput = new TextComponent(searchContainer);
         searchInput.inputEl.addClass('modal-search-input-full-width');
-        searchInput.setPlaceholder(t('SEARCH_ICONS_PLACEHOLDER'));
+        searchInput.setPlaceholder(t('browser.placeholder'));
 
         this.grid = contentEl.createDiv({ cls: 'icon-grid' });
         
-        this.scrollHandler = () => {
+        // Use AbortController so the listener is guaranteed to be removed
+        // when the modal closes, even if onClose is called before the grid is GC'd.
+        this.scrollAbortController = new AbortController();
+        this.grid.addEventListener('scroll', () => {
             if (this.grid.scrollTop + this.grid.clientHeight >= this.grid.scrollHeight - 100) {
                 this.renderNextBatch();
             }
-        };
-        this.grid.addEventListener('scroll', this.scrollHandler);
+        }, { signal: this.scrollAbortController.signal });
 
         searchInput.onChange((value) => this.filterIcons(value));
         this.filterIcons();
@@ -67,7 +69,7 @@ export class IconsBrowserModal extends Modal {
         
         if (this.filteredEntries.length === 0) {
             this.grid.createDiv({ 
-                text: t('NO_ICONS'), 
+                text: t('browser.noIcons'), 
                 cls: 'setting-item-description' 
             });
             return;
@@ -88,8 +90,25 @@ export class IconsBrowserModal extends Modal {
             const iconItem = this.grid.createDiv({ 
                 cls: 'icon-item',
                 attr: { 
-                    'aria-label': iconId,
-                    'title': iconId
+                    'aria-label': t('browser.clickToCopy'),
+                    'title': iconId,
+                    'tabindex': '0',
+                    'role': 'button',
+                }
+            });
+
+            iconItem.addEventListener('click', () => {
+                void navigator.clipboard.writeText(iconId).then(() => {
+                    new Notice(t('browser.copied', { id: iconId }), 2000);
+                });
+            });
+
+            iconItem.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    void navigator.clipboard.writeText(iconId).then(() => {
+                        new Notice(t('browser.copied', { id: iconId }), 2000);
+                    });
                 }
             });
             
@@ -104,11 +123,10 @@ export class IconsBrowserModal extends Modal {
     }
 
     onClose() {
-        if (this.scrollHandler && this.grid) {
-            this.grid.removeEventListener('scroll', this.scrollHandler);
-            this.scrollHandler = null;
-        }
-        
+        // Abort the scroll listener — works even if the grid element is already gone.
+        this.scrollAbortController?.abort();
+        this.scrollAbortController = null;
+
         const { contentEl } = this;
         contentEl.empty();
     }

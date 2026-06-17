@@ -11,6 +11,8 @@ interface ObsidianPlugins {
 	getPlugin(id: string): PluginWithReload | null;
 	manifests: Record<string, { name: string; [key: string]: unknown }>;
 	enabledPlugins: Set<string>;
+	disablePlugin(id: string): Promise<void>;
+	enablePlugin(id: string): Promise<void>;
 }
 
 interface ObsidianCommands {
@@ -48,9 +50,7 @@ export class PluginManager {
 		let failedCount = 0;
 
 		pluginIds.forEach((pluginId, index) => {
-			const plugin = this.app.plugins.getPlugin(pluginId);
-
-			if (!plugin) {
+			if (!this.app.plugins.enabledPlugins.has(pluginId)) {
 				this.logger.debug(`Plugin ${pluginId} not found or not enabled`);
 				failedCount++;
 				return;
@@ -58,46 +58,20 @@ export class PluginManager {
 
 			this.logger.debug(`Found plugin: ${pluginId}, attempting reload`);
 			activeWindow.setTimeout(() => {
-				try {
-					const currentPlugin = this.app.plugins.getPlugin(pluginId);
-					if (!currentPlugin) {
-						this.logger.debug(`Plugin ${pluginId} no longer available`);
-						failedCount++;
-						return;
-					}
-
-					if (typeof currentPlugin.reload === 'function') {
-						currentPlugin.reload();
+				void (async () => {
+					try {
+						// Use the official (though internal) disable/enable cycle instead of
+						// calling onunload/onload directly, which can cause memory leaks and
+						// duplicate event handlers in third-party plugins.
+						await this.app.plugins.disablePlugin(pluginId);
+						await this.app.plugins.enablePlugin(pluginId);
 						this.logger.debug(`Plugin ${pluginId} reloaded successfully`);
 						reloadedCount++;
-					} else if (typeof currentPlugin.onunload === 'function' && typeof currentPlugin.onload === 'function') {
-						currentPlugin.onunload();
-						activeWindow.setTimeout(() => {
-							void (async () => {
-								try {
-									const pluginToLoad = this.app.plugins.getPlugin(pluginId);
-									if (!pluginToLoad) {
-										this.logger.debug(`Plugin ${pluginId} disappeared during reload`);
-										failedCount++;
-										return;
-									}
-									await pluginToLoad.onload();
-									this.logger.debug(`Plugin ${pluginId} reloaded successfully (manual cycle)`);
-									reloadedCount++;
-								} catch (error) {
-									this.logger.error(`Error reloading plugin ${pluginId}:`, error);
-									failedCount++;
-								}
-							})();
-						}, CONFIG.PLUGIN_RELOAD_DELAYS.CYCLE);
-					} else {
-						this.logger.debug(`Plugin ${pluginId} does not have a reload method`);
+					} catch (error) {
+						this.logger.error(`Error reloading plugin ${pluginId}:`, error);
 						failedCount++;
 					}
-				} catch (error) {
-					this.logger.error(`Error reloading plugin ${pluginId}:`, error);
-					failedCount++;
-				}
+				})();
 			}, CONFIG.PLUGIN_RELOAD_DELAYS.BASE + (index * CONFIG.PLUGIN_RELOAD_DELAYS.INCREMENT));
 		});
 
