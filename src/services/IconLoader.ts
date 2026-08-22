@@ -45,6 +45,12 @@ export class IconLoader {
 		changedCount: number;
 		newCache: IconCache
 	}> {
+		// If the monochrome color list changed since the previous pass, icons
+		// already registered were normalized with the old colors — force a full
+		// re-read so cache hits don't skip re-normalization.
+		if (this.monochromeColors !== monochromeColors) {
+			this.registeredPaths.clear();
+		}
 		this.iconCache = iconCache;
 		this.monochromeColors = monochromeColors;
 		const iconsFolderPath = this.getIconsFolderPath();
@@ -93,19 +99,31 @@ export class IconLoader {
 	async restoreIconsFromCache(iconCache: IconCache, monochromeColors: string): Promise<number> {
 		this.monochromeColors = monochromeColors;
 		this.iconCache = iconCache;
-		const promises: Promise<boolean>[] = [];
 
+		const entries: { iconId: string; path: string }[] = [];
 		for (const key in iconCache) {
 			if (key === '_cacheVersion') continue;
-
 			const cachedIcon = iconCache[key] as IconCacheEntry;
 			if (cachedIcon?.iconId) {
-				promises.push(this.loadIconFromFile(cachedIcon.iconId, key));
+				entries.push({ iconId: cachedIcon.iconId, path: key });
 			}
 		}
 
-		const results = await Promise.all(promises);
-		const restoredCount = results.filter(Boolean).length;
+		// Use the same concurrency cap as processIconsInBatches to avoid
+		// saturating the I/O queue when hundreds of icons are cached.
+		const CONCURRENCY = CONFIG.IO_CONCURRENCY;
+		let restoredCount = 0;
+		for (let i = 0; i < entries.length; i += CONCURRENCY) {
+			const batch = entries.slice(i, i + CONCURRENCY);
+			const results = await Promise.all(
+				batch.map(e => this.loadIconFromFile(e.iconId, e.path))
+			);
+			restoredCount += results.filter(Boolean).length;
+
+			if (i + CONCURRENCY < entries.length) {
+				await new Promise(resolve => window.setTimeout(resolve, 0));
+			}
+		}
 
 		this.logger.debug(`Restored ${restoredCount} icons from cache`);
 		return restoredCount;
@@ -115,6 +133,10 @@ export class IconLoader {
 		try {
 			const rawSvgContent = await this.app.vault.adapter.read(iconPath);
 			const svgContent = HelperUtils.normalizeSvgContent(rawSvgContent, this.monochromeColors);
+			if (!svgContent) {
+				this.logger.warn(`Skipping empty or invalid SVG: ${iconPath}`);
+				return false;
+			}
 			addIcon(iconId, svgContent);
 			this.registeredPaths.add(iconPath);
 			return true;
@@ -136,6 +158,12 @@ export class IconLoader {
 		return {
 			total: cacheKeys.length > 0 ? cacheKeys.length - 1 : 0 // -1 для _cacheVersion
 		};
+	}
+
+	/** Releases in-memory state held by the loader. Called on plugin unload. */
+	dispose(): void {
+		this.registeredPaths.clear();
+		HelperUtils.clearCaches();
 	}
 
 	private getIconsFolderPath(): string {
@@ -175,7 +203,7 @@ export class IconLoader {
 	private async processIconsInBatches(svgFiles: IconFile[], iconCache: IconCache): Promise<ProcessIconResult[]> {
 		// Process icons in a concurrency pool. stat() and read() are I/O-bound, so
 		// higher concurrency parallelizes filesystem ops without blocking the UI.
-		const CONCURRENCY = 16;
+		const CONCURRENCY = CONFIG.IO_CONCURRENCY;
 		const results: (ProcessIconResult | { success: false })[] = [];
 
 		for (let i = 0; i < svgFiles.length; i += CONCURRENCY) {
@@ -245,6 +273,10 @@ export class IconLoader {
 
 			const processResult = await this.processNewIcon(icon, cacheResult.fileStat);
 			if (processResult.success) {
+				if (!processResult.svgContent) {
+					this.logger.warn(`Skipping empty or invalid SVG: ${icon.path}`);
+					return {success: false};
+				}
 				addIcon(processResult.iconId, processResult.svgContent);
 				this.registeredPaths.add(icon.path);
 				return {
@@ -310,13 +342,17 @@ export class IconLoader {
 		};
 	}
 
-	private async listIconsRecursive(folderPath: string, currentPrefix: string): Promise<IconFile[]> {
+	private async listIconsRecursive(folderPath: string, currentPrefix: string, depth = 0): Promise<IconFile[]> {
+		if (depth > CONFIG.MAX_SCAN_DEPTH) {
+			this.logger.warn(`Max folder depth (${CONFIG.MAX_SCAN_DEPTH}) reached at '${folderPath}', stopping recursion.`);
+			return [];
+		}
 		try {
 			const listResult = await this.app.vault.adapter.list(folderPath);
 			const iconFiles: IconFile[] = [];
 
 			iconFiles.push(...this.processCurrentDirectoryFiles(listResult.files, currentPrefix));
-			const nestedIconFiles = await this.processSubfolders(listResult.folders, currentPrefix);
+			const nestedIconFiles = await this.processSubfolders(listResult.folders, currentPrefix, depth);
 			iconFiles.push(...nestedIconFiles);
 
 			return iconFiles;
@@ -334,7 +370,7 @@ export class IconLoader {
 		}));
 	}
 
-	private async processSubfolders(folders: string[], currentPrefix: string): Promise<IconFile[]> {
+	private async processSubfolders(folders: string[], currentPrefix: string, depth = 0): Promise<IconFile[]> {
 		const subfolderPromises = folders.map(subfolderAbsolutePath => {
 			const folderName = subfolderAbsolutePath.substring(subfolderAbsolutePath.lastIndexOf('/') + 1);
 			const cleanedFolderName = HelperUtils.cleanFolderName(folderName);
@@ -342,7 +378,7 @@ export class IconLoader {
 				? [currentPrefix, cleanedFolderName].join(CONFIG.ID_SEPARATOR)
 				: cleanedFolderName;
 
-			return this.listIconsRecursive(subfolderAbsolutePath, newPrefix);
+			return this.listIconsRecursive(subfolderAbsolutePath, newPrefix, depth + 1);
 		});
 
 		const nestedIconLists = await Promise.all(subfolderPromises);

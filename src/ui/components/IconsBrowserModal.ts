@@ -2,6 +2,7 @@ import { App, Modal, Notice, Setting, TextComponent, setIcon } from 'obsidian';
 import AddCustomIconsPlugin from '../../../main';
 import { IconCacheEntry } from '../../types';
 import { t } from '../../lang/helpers';
+import { FixIconModal } from './FixIconModal';
 
 export class IconsBrowserModal extends Modal {
     plugin: AddCustomIconsPlugin;
@@ -85,11 +86,11 @@ export class IconsBrowserModal extends Modal {
 
         if (batch.length === 0) return;
 
-        batch.forEach(([_path, entry]) => {
+        batch.forEach(([path, entry]) => {
             const iconId = entry.iconId;
-            const iconItem = this.grid.createDiv({ 
+            const iconItem = this.grid.createDiv({
                 cls: 'icon-item',
-                attr: { 
+                attr: {
                     'aria-label': t('browser.clickToCopy'),
                     'title': iconId,
                     'tabindex': '0',
@@ -111,9 +112,37 @@ export class IconsBrowserModal extends Modal {
                     });
                 }
             });
-            
+
             const preview = iconItem.createDiv({ cls: 'icon-preview' });
             setIcon(preview, iconId);
+
+            const fixBtn = iconItem.createDiv({
+                cls: 'icon-fix-btn',
+                attr: {
+                    'aria-label': t('browser.fixIcon'),
+                    'title': t('browser.fixIcon'),
+                    'tabindex': '0',
+                    'role': 'button',
+                }
+            });
+            setIcon(fixBtn, 'paintbrush');
+            const openFixModal = () => {
+                // Re-render just this item's preview instead of the whole grid —
+                // applying a fix is now a targeted single-icon update, so a full
+                // filterIcons() re-render would be needlessly expensive.
+                new FixIconModal(this.app, this.plugin, path, iconId, () => setIcon(preview, iconId)).open();
+            };
+            fixBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                openFixModal();
+            });
+            fixBtn.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    openFixModal();
+                }
+            });
 
             const info = iconItem.createDiv({ cls: 'icon-info' });
             info.createDiv({ cls: 'icon-name', text: iconId });

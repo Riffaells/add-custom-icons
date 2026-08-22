@@ -1,5 +1,6 @@
 import { Setting, TextComponent, ExtraButtonComponent, Notice } from 'obsidian';
 import { t } from '../../lang/helpers';
+import { HelperUtils } from '../../utils/helpers';
 
 export class ColorsManager {
     private containerEl: HTMLElement;
@@ -76,18 +77,12 @@ export class ColorsManager {
     }
 
     /**
-     * Validates color format (hex or named color)
-     * @param color - Color string to validate
-     * @returns true if valid, false otherwise
+     * Validates color format (hex or named color).
+     * Shared with the declarative colour list so both settings paths accept
+     * exactly the same values.
      */
     private isValidColor(color: string): boolean {
-        // Check if it's a hex color (#RGB, #RRGGBB, #RRGGBBAA)
-        if (/^#[0-9A-Fa-f]{3,8}$/.test(color)) {
-            return true;
-        }
-        // Check if it's a named color (letters only)
-        return /^[a-z]+$/i.test(color);
-
+        return HelperUtils.isValidColor(color);
     }
 
     private renderColorsList(): void {

@@ -6,7 +6,10 @@ export const CONFIG = {
 	SUPPORTED_EXTENSIONS: ['.svg'],
 	ID_SEPARATOR: '_',
 	CACHE_VERSION: 2,
+	MAX_SCAN_DEPTH: 20,
 	BACKGROUND_LOAD_DELAY: 200,
+	/** Concurrency cap for parallel file stat()/read() calls during scan and cache restore. */
+	IO_CONCURRENCY: 16,
 	PLUGIN_RELOAD_DELAYS: {
 		BASE: 500,
 		INCREMENT: 100,
@@ -29,6 +32,5 @@ export const REGEX = {
 	WHITESPACE: /\s+/g,
 	DOTS: /\./g,
 	SVG_DIMENSIONS: / (?:width|height)="[^"]*"/g,
-	SVG_COLORS: /(fill|stroke)="(?!(none|currentColor|url))[^"]*"/g,
 	SVG_HAS_FILL_STROKE: / (fill|stroke)=/g
 } as const;

@@ -18,6 +18,7 @@ export default {
                 name: "Custom Path",
                 desc: "Enter a custom path relative to vault root (e.g., icons/)",
                 placeholder: "icons/",
+                required: "Enter a path to the icons folder",
             },
             openFolder: "Open Folder",
             reloadIcons: "Reload Icons",
@@ -29,7 +30,8 @@ export default {
         },
         colors: {
             name: "Monochrome Colors",
-            desc: "Comma-separated list of colors (e.g. #000, black) that should be converted to currentColor to support theming.",
+            desc: "Colours replaced with currentColor so icons follow the theme. Hex (#000000) or a colour name (black).",
+            header: "Colour list",
             placeholder: "#000000 or black",
             empty: "No colors added",
             editTooltip: "Edit {color}",
@@ -69,12 +71,17 @@ export default {
             notFound: "No other plugins found",
             noResults: "No results found",
             disabled: "(disabled)",
+            notInstalled: "plugin not installed",
         },
         debug: {
             header: "Debug",
             mode: {
                 name: "Debug Mode",
                 desc: "Enable detailed logging in developer console",
+            },
+            stats: {
+                name: "Icon statistics",
+                desc: "Show how many icons are loaded into memory",
             },
         },
     },
@@ -87,6 +94,17 @@ export default {
         noIcons: "No icons found",
         copied: "Copied: {id}",
         clickToCopy: "Click to copy ID",
+        fixIcon: "Fix icon colors",
+    },
+    fixModal: {
+        title: "Fix icon: {id}",
+        desc: "Select the colors that should follow the theme. The preview updates instantly. Applying updates only this icon — no rescan needed.",
+        noColors: "No fixed colors found in this icon",
+        alreadyAdded: "Already in the list",
+        apply: "Apply fix",
+        applied: "Fixed! Added {count} color(s) to the monochrome list.",
+        applyFailed: "Failed to apply icon fix",
+        readError: "Failed to read icon file",
     },
     options: {
         plugins: "Selected Plugins",

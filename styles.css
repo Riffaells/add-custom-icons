@@ -186,3 +186,82 @@
     .icon-actions { flex-direction: column; }
     .icon-actions button { width: 100%; }
 }
+/* Fix-icon button shown on hover over an icon in the browser grid */
+.icon-item { position: relative; }
+
+.icon-fix-btn {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 4px;
+    color: var(--text-muted);
+    opacity: 0;
+    cursor: pointer;
+    transition: opacity 0.1s ease, color 0.1s ease;
+}
+
+.icon-item:hover .icon-fix-btn,
+.icon-fix-btn:focus-visible { opacity: 1; }
+
+.icon-fix-btn:hover {
+    color: var(--text-normal);
+    background-color: var(--background-modifier-border);
+}
+
+.icon-fix-btn svg { width: 14px; height: 14px; }
+
+/* Monochrome colour list (Obsidian 1.13+ declarative settings).
+   Rows carry no label, so the empty info column is collapsed and the swatch +
+   input take the whole width. */
+.aci-dense-row .setting-item-info { display: none; }
+
+.aci-dense-row .setting-item-control {
+    flex: 1 1 auto;
+    justify-content: flex-start;
+    gap: 8px;
+    min-width: 0;
+}
+
+.aci-dense-row .setting-item-control input[type='text'] {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.aci-color-swatch {
+    flex: 0 0 auto;
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    border: 1px solid var(--background-modifier-border);
+}
+
+/* Fix-icon modal */
+.fix-icon-preview {
+    display: flex;
+    justify-content: center;
+    margin: 8px 0 16px;
+    color: var(--text-normal);
+}
+
+.fix-icon-preview svg { width: 48px; height: 48px; }
+
+.fix-icon-colors {
+    max-height: 40vh;
+    overflow-y: auto;
+    margin-bottom: 8px;
+}
+
+.fix-icon-swatch {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    margin-right: 8px;
+    border-radius: 3px;
+    border: 1px solid var(--background-modifier-border);
+    vertical-align: middle;
+}

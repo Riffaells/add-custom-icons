@@ -1,18 +1,72 @@
-import { App, PluginSettingTab, Setting, ButtonComponent, Notice, setIcon, Platform, normalizePath } from 'obsidian';
+import { App, PluginSettingTab, Setting, ButtonComponent, Notice, setIcon, SettingDefinitionItem } from 'obsidian';
 import AddCustomIconsPlugin from '../../main';
 import { t } from '../lang/helpers';
 import { IconsBrowserModal, PluginSelectionModal, ColorsManager } from './components';
 import { FolderSuggest } from './components';
+import { buildSettingDefinitions, SettingsContext, SettingsKey } from './settings/definitions';
+import { getCurrentIconsPath, openIconsFolder } from './settings/iconsFolder';
+
+/**
+ * Keys whose value changes the *shape* of the definition tree (which rows
+ * exist, what their descriptions say) rather than just a `visible`/`disabled`
+ * predicate — those need a full rebuild instead of the cheap DOM refresh.
+ */
+const STRUCTURAL_KEYS: ReadonlySet<string> = new Set<SettingsKey>(['iconsPathType', 'customIconsPath', 'restartTarget']);
 
 export class AddCustomIconsSettingTab extends PluginSettingTab {
 
-    icon = "image-down"; 
+    icon = "image-down";
     plugin: AddCustomIconsPlugin;
+    /** State the declarative definitions must keep across rebuilds. */
+    private ctx: SettingsContext;
 
     constructor(app: App, plugin: AddCustomIconsPlugin) {
         super(app, plugin);
         this.plugin = plugin;
+        this.ctx = {
+            app,
+            plugin,
+            update: () => this.update(),
+            pendingColor: false,
+            focusColorIndex: null,
+        };
     }
+
+    /* ===== Obsidian 1.13+: declarative settings ===== */
+
+    getSettingDefinitions(): SettingDefinitionItem[] {
+        return buildSettingDefinitions(this.ctx);
+    }
+
+    getControlValue(key: string): unknown {
+        return this.plugin.settings[key as SettingsKey];
+    }
+
+    async setControlValue(key: string, value: unknown): Promise<void> {
+        // The core hands us `string`/`unknown`; the keys actually reaching here
+        // are the `control` keys built in definitions.ts, all of them scalars.
+        const settings = this.plugin.settings as unknown as Record<string, unknown>;
+        settings[key] = typeof value === 'string' ? value.trim() : value;
+
+        // Switching to a custom location with nothing entered yet would leave
+        // the loader pointing at the vault root — seed the usual folder instead.
+        if (key === 'iconsPathType' && value === 'custom' && !this.plugin.settings.customIconsPath) {
+            this.plugin.settings.customIconsPath = 'icons/';
+        }
+
+        await this.plugin.saveSettings();
+
+        if (STRUCTURAL_KEYS.has(key)) {
+            this.update();
+        } else {
+            this.refreshDomState();
+        }
+    }
+
+    /* ===== Legacy: Obsidian < 1.13 =====
+       Not called when getSettingDefinitions() returns a non-empty array, i.e.
+       only older Obsidian versions ever render this path. Kept as-is (plus the
+       debug toggle) so nothing regresses for users who haven't updated. */
 
     display(): void {
         const { containerEl } = this;
@@ -26,10 +80,12 @@ export class AddCustomIconsSettingTab extends PluginSettingTab {
 
         this.createIconsSection(mainContainer);
         this.createRestartSection(mainContainer);
-        
+
         if (this.plugin.settings.restartTarget === 'plugins') {
             this.createPluginSelectionInterface(mainContainer);
         }
+
+        this.createDebugSection(mainContainer);
     }
 
     private createIconEl(iconId: string): HTMLElement {
@@ -40,7 +96,7 @@ export class AddCustomIconsSettingTab extends PluginSettingTab {
 
     private createIconsSection(containerEl: HTMLElement): void {
         const section = containerEl.createDiv({ cls: 'settings-section-card' });
-        
+
         const heading = new Setting(section)
             .setName(t('settings.management.header'))
             .setHeading();
@@ -56,11 +112,11 @@ export class AddCustomIconsSettingTab extends PluginSettingTab {
                 .setValue(this.plugin.settings.iconsPathType)
                 .onChange(async (value: 'plugin' | 'vault' | 'custom') => {
                     this.plugin.settings.iconsPathType = value;
-                    
+
                     if (value === 'custom' && !this.plugin.settings.customIconsPath) {
                         this.plugin.settings.customIconsPath = 'icons/';
                     }
-                    
+
                     await this.plugin.saveSettings();
                     this.display();
                 }));
@@ -84,7 +140,7 @@ export class AddCustomIconsSettingTab extends PluginSettingTab {
                 });
         }
 
-        const currentPath = this.getCurrentIconsPath();
+        const currentPath = getCurrentIconsPath(this.plugin);
         new Setting(section)
             .setName(t('settings.management.folder'))
             .setDesc(`${t('settings.management.folderDesc')}: ${currentPath}`);
@@ -93,7 +149,7 @@ export class AddCustomIconsSettingTab extends PluginSettingTab {
 
         new ButtonComponent(actionsContainer)
             .setButtonText(t('settings.management.openFolder'))
-            .onClick(() => { void this.openIconsFolder(); });
+            .onClick(() => { void openIconsFolder(this.app, this.plugin); });
 
         new ButtonComponent(actionsContainer)
             .setButtonText(t('settings.management.reloadIcons'))
@@ -101,7 +157,7 @@ export class AddCustomIconsSettingTab extends PluginSettingTab {
                 await this.plugin.reloadIcons();
                 this.display();
             });
-        
+
         new ButtonComponent(actionsContainer)
             .setButtonText(t('browser.header'))
             .onClick(() => {
@@ -118,7 +174,7 @@ export class AddCustomIconsSettingTab extends PluginSettingTab {
             .filter(c => c.length > 0);
 
         new ColorsManager(
-            section, 
+            section,
             t('settings.colors.name'),
             t('settings.colors.desc'),
             colors,
@@ -131,7 +187,7 @@ export class AddCustomIconsSettingTab extends PluginSettingTab {
 
     private createRestartSection(containerEl: HTMLElement): void {
         const section = containerEl.createDiv({ cls: 'settings-section-card' });
-        
+
         const heading = new Setting(section)
             .setName(t('settings.restart.header'))
             .setHeading();
@@ -164,7 +220,7 @@ export class AddCustomIconsSettingTab extends PluginSettingTab {
 
     private createPluginSelectionInterface(containerEl: HTMLElement): void {
         const section = containerEl.createDiv({ cls: 'settings-section-card' });
-        
+
         const heading = new Setting(section)
             .setName(t('settings.plugins.header'))
             .setHeading();
@@ -176,15 +232,15 @@ export class AddCustomIconsSettingTab extends PluginSettingTab {
         if (this.plugin.settings.selectedPlugins.length > 0) {
             const pluginsList = section.createDiv({ cls: 'selected-plugins-compact' });
             const installedPlugins = this.plugin.pluginManager.getInstalledPlugins();
-            
+
             const pluginMap = new Map(installedPlugins.map(p => [p.id, p]));
-            
+
             this.plugin.settings.selectedPlugins.forEach(pluginId => {
                 const pluginInfo = pluginMap.get(pluginId);
                 const pluginName = pluginInfo ? pluginInfo.name : pluginId;
                 const pluginTag = pluginsList.createSpan({ cls: 'plugin-tag', text: pluginName });
-                const removeBtn = pluginTag.createSpan({ 
-                    cls: 'plugin-tag-remove', 
+                const removeBtn = pluginTag.createSpan({
+                    cls: 'plugin-tag-remove',
                     text: '×',
                     attr: { 'aria-label': t('settings.plugins.removeTooltip') }
                 });
@@ -212,92 +268,35 @@ export class AddCustomIconsSettingTab extends PluginSettingTab {
                 }));
     }
 
+    private createDebugSection(containerEl: HTMLElement): void {
+        const section = containerEl.createDiv({ cls: 'settings-section-card' });
+
+        const heading = new Setting(section)
+            .setName(t('settings.debug.header'))
+            .setHeading();
+        heading.nameEl.prepend(this.createIconEl('bug'));
+
+        new Setting(section)
+            .setName(t('settings.debug.mode.name'))
+            .setDesc(t('settings.debug.mode.desc'))
+            .addToggle(toggle => toggle
+                .setValue(this.plugin.settings.debugMode)
+                .onChange(async (value) => {
+                    this.plugin.settings.debugMode = value;
+                    await this.plugin.saveSettings();
+                }));
+
+        new Setting(section)
+            .setName(t('settings.debug.stats.name'))
+            .setDesc(t('settings.debug.stats.desc'))
+            .addButton(button => button
+                .setButtonText(t('settings.debug.stats.name'))
+                .onClick(() => this.plugin.showMemoryStats()));
+    }
+
     private async removePlugin(pluginId: string): Promise<void> {
         this.plugin.settings.selectedPlugins = this.plugin.settings.selectedPlugins.filter(id => id !== pluginId);
         await this.plugin.saveSettings();
         new Notice(t('notices.pluginRemoved'));
-    }
-
-    private async openIconsFolder(): Promise<void> {
-        const relativePath = this.getCurrentIconsPath();
-        
-        try {
-            await this.ensureFolderExists(relativePath);
-            
-            const adapter = this.app.vault.adapter;
-            const fullPath = this.getFullPath(adapter, relativePath);
-            
-            if (!fullPath) {
-                await this.copyPathToClipboard(relativePath);
-                return;
-            }
-
-            const opened = await this.tryOpenInExplorer(fullPath);
-            if (opened) {
-                new Notice(t('settings.management.folderCreated', { path: fullPath }));
-            } else {
-                await this.copyPathToClipboard(fullPath);
-            }
-        } catch (error) {
-            this.plugin.logger.error('Error opening icons folder:', error);
-            new Notice(t('settings.management.errorOpening'));
-        }
-    }
-
-    private async ensureFolderExists(path: string): Promise<void> {
-        const exists = await this.app.vault.adapter.exists(path);
-        if (!exists) {
-            await this.app.vault.adapter.mkdir(path);
-        }
-    }
-
-    private getFullPath(adapter: App['vault']['adapter'], relativePath: string): string | null {
-        if (!('getBasePath' in adapter) || typeof (adapter as { getBasePath?: unknown }).getBasePath !== 'function') {
-            return null;
-        }
-        
-        const basePath = (adapter as { getBasePath: () => string }).getBasePath();
-        const separator = basePath.endsWith('/') || basePath.endsWith('\\') ? '' : '/';
-        return basePath + separator + relativePath;
-    }
-
-    private async tryOpenInExplorer(fullPath: string): Promise<boolean> {
-        if (!Platform.isDesktop) {
-            return false;
-        }
-        try {
-            // Dynamic import to avoid importing Node.js built-ins on mobile
-            const electron = (window as Window & { require?: (mod: string) => { shell?: { openPath: (p: string) => Promise<string> } } }).require?.('electron');
-            if (!electron?.shell) {
-                return false;
-            }
-
-            const result = await electron.shell.openPath(fullPath);
-            if (result) {
-                this.plugin.logger.warn('Could not open folder:', result);
-                return false;
-            }
-            return true;
-        } catch {
-            return false;
-        }
-    }
-
-    private async copyPathToClipboard(path: string): Promise<void> {
-        await navigator.clipboard.writeText(path);
-        new Notice(t('settings.management.pathCopied', { path }));
-    }
-
-    private getCurrentIconsPath(): string {
-        switch (this.plugin.settings.iconsPathType) {
-            case 'plugin':
-                return normalizePath(`${this.plugin.manifest.dir}/icons`);
-            case 'vault':
-                return normalizePath(`${this.app.vault.configDir}/icons`);
-            case 'custom':
-                return normalizePath(this.plugin.settings.customIconsPath || 'icons');
-            default:
-                return normalizePath(`${this.plugin.manifest.dir}/icons`);
-        }
     }
 }

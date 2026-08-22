@@ -9,7 +9,8 @@ export const localeMap: LocaleMap = {
    ru
 };
 
-const locale = localeMap[moment.locale()];
+// Fall back to English if Obsidian reports a locale we don't ship translations for.
+const locale = localeMap[moment.locale()] ?? en;
 
 function getPath(obj: Record<string, unknown>, path: string): string | undefined {
     const parts = path.split('.');

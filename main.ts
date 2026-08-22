@@ -70,6 +70,11 @@ export default class AddCustomIconsPlugin extends Plugin {
 				this.removeCustomIcon(entry.iconId);
 			}
 		}
+
+		// Release in-memory state so nothing lingers after unload.
+		this.iconLoader?.dispose();
+		this.iconCache = { _cacheVersion: CONFIG.CACHE_VERSION };
+		this.loadedIconsCount = 0;
 	}
 
 	private initializeServices(): void {
@@ -101,7 +106,8 @@ export default class AddCustomIconsPlugin extends Plugin {
 		});
 	}
 
-	private showMemoryStats(): void {
+	/** Public: reachable both from the command palette and the debug settings row. */
+	showMemoryStats(): void {
 		const stats = this.iconLoader.getMemoryStats();
 		const message = `Icon Statistics:
 • Total icons loaded: ${stats.total}
@@ -158,6 +164,12 @@ export default class AddCustomIconsPlugin extends Plugin {
 		if (!this.settings.selectedPlugins) this.settings.selectedPlugins = [];
 		if (!this.settings.iconsPathType) this.settings.iconsPathType = 'plugin';
 		if (!this.settings.customIconsPath) this.settings.customIconsPath = '';
+		// The legacy branch above can Object.assign an explicit `undefined` over
+		// the default (destructured keys missing from old data.json), which would
+		// crash any .split() caller like FixIconModal.
+		if (typeof this.settings.monochromeColors !== 'string') {
+			this.settings.monochromeColors = DEFAULT_SETTINGS.monochromeColors;
+		}
 	}
 
 	async saveSettings(): Promise<void> {

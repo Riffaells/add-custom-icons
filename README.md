@@ -24,7 +24,8 @@ A plugin for Obsidian that loads custom SVG icons from the `icons` folder and au
 │   │   ├── PluginManager.ts  # Plugin management service
 │   │   └── I18nService.ts    # Localization service
 │   └── ui/
-│       └── SettingsTab.ts    # Settings interface
+│       ├── SettingsTab.ts    # Settings interface (1.13 API + legacy display())
+│       └── settings/         # Declarative setting definitions (Obsidian 1.13+)
 └── autobuild.py              # Development sync script
 ```
 
@@ -49,9 +50,16 @@ A plugin for Obsidian that loads custom SVG icons from the `icons` folder and au
 
 ## Settings
 
+- **Icons Location**: plugin folder, vault folder (`.obsidian/icons`) or a custom path
+- **Monochrome Colors**: colours replaced with `currentColor` so icons follow the theme
 - **Enable Auto Restart**: Automatically restart plugins after loading icons
 - **Restart Target**: What to restart (selected plugins, entire Obsidian, or nothing)
 - **Plugin Selection**: Convenient interface for adding/removing plugins from restart list
+- **Debug Mode**: detailed logging in the developer console
+
+On Obsidian 1.13+ the tab is built declaratively (`getSettingDefinitions()`), so the plugin's
+settings show up in Obsidian's global settings search; older versions get the previous
+`display()` interface unchanged.
 
 ## Development
 

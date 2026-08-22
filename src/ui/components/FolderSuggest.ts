@@ -103,13 +103,20 @@ export class FolderSuggest extends AbstractInputSuggest<string> {
 
         collectFolders(root);
 
-        folders.sort((a, b) => {
-            const depthA = (a.match(/\//g) || []).length;
-            const depthB = (b.match(/\//g) || []).length;
-            if (depthA !== depthB) return depthA - depthB;
-            return a.localeCompare(b);
-        });
+        // Precompute depth once per folder instead of running a regex inside the
+        // comparator (which would execute O(n log n) times).
+        return folders
+            .map(path => ({ path, depth: this.countDepth(path) }))
+            .sort((a, b) => (a.depth - b.depth) || a.path.localeCompare(b.path))
+            .map(item => item.path);
+    }
 
-        return folders;
+    /** Counts path separators without allocating a regex match array */
+    private countDepth(path: string): number {
+        let depth = 0;
+        for (let i = 0; i < path.length; i++) {
+            if (path[i] === '/') depth++;
+        }
+        return depth;
     }
 }
