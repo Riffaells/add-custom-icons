@@ -27,6 +27,10 @@ export default {
             folderCreated: "Folder created. Path copied: {path}",
             pathCopied: "Path copied to clipboard: {path}",
             errorOpening: "Failed to open icons folder",
+            backgroundScan: {
+                name: "Scan for changes on startup",
+                desc: "Shortly after Obsidian starts, re-scan the icons folder to pick up added, removed, or edited icons. Turn off to only load from cache and rely on the \"Reload Icons\" button.",
+            },
         },
         colors: {
             name: "Monochrome Colors",

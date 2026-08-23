@@ -29,7 +29,7 @@ import { getCurrentIconsPath, openIconsFolder } from './iconsFolder';
  */
 
 /** Setting keys that can back a `control` row (scalars only). */
-export type SettingsKey = Extract<keyof AddCustomIconsSettings, 'iconsPathType' | 'customIconsPath' | 'enableAutoRestart' | 'restartTarget' | 'debugMode'>;
+export type SettingsKey = Extract<keyof AddCustomIconsSettings, 'iconsPathType' | 'customIconsPath' | 'enableAutoRestart' | 'restartTarget' | 'debugMode' | 'enableBackgroundScan'>;
 
 /**
  * State shared between rebuilds of the tree. `getSettingDefinitions()` is
@@ -111,6 +111,15 @@ function iconsGroup(ctx: SettingsContext): SettingDefinitionGroup<SettingsKey> {
                 name: t('browser.header'),
                 desc: t('browser.desc'),
                 action: () => { new IconsBrowserModal(app, plugin).open(); },
+            },
+            {
+                name: t('settings.management.backgroundScan.name'),
+                desc: t('settings.management.backgroundScan.desc'),
+                control: {
+                    type: 'toggle',
+                    key: 'enableBackgroundScan',
+                    defaultValue: DEFAULT_SETTINGS.enableBackgroundScan,
+                },
             },
         ],
     };

@@ -119,6 +119,11 @@ export default class AddCustomIconsPlugin extends Plugin {
 	}
 
 	private scheduleBackgroundIconLoad(): void {
+		if (!this.settings.enableBackgroundScan) {
+			this.logger.debug('Background scan disabled in settings, skipping');
+			return;
+		}
+
 		// Store the timeout id and clear it on unload to avoid the callback
 		// firing on a disposed plugin.
 		const timeoutId = window.setTimeout(() => {

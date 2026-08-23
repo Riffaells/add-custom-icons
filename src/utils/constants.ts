@@ -2,6 +2,8 @@ import {AddCustomIconsSettings} from '../types';
 
 export const CONFIG = {
 	ICONS_FOLDER: 'icons',
+	/** Plugin-local file (not data.json) caching normalized SVG content, keyed by path. */
+	CONTENT_CACHE_FILE: 'cache.json',
 	SVG_EXTENSION: '.svg',
 	SUPPORTED_EXTENSIONS: ['.svg'],
 	ID_SEPARATOR: '_',
@@ -25,7 +27,8 @@ export const DEFAULT_SETTINGS: AddCustomIconsSettings = {
 	debugMode: false,
 	monochromeColors: '#000000,#000,black,#ffffff,#fff,white,#1C274C,#1C274D',
 	iconsPathType: 'plugin',
-	customIconsPath: ''
+	customIconsPath: '',
+	enableBackgroundScan: true
 };
 
 export const REGEX = {

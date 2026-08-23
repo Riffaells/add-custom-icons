@@ -168,6 +168,16 @@ export class AddCustomIconsSettingTab extends PluginSettingTab {
             .setDesc(t('settings.management.loadedCount', { count: this.plugin.loadedIconsCount }))
             .setClass('loaded-icons-count-setting');
 
+        new Setting(section)
+            .setName(t('settings.management.backgroundScan.name'))
+            .setDesc(t('settings.management.backgroundScan.desc'))
+            .addToggle(toggle => toggle
+                .setValue(this.plugin.settings.enableBackgroundScan)
+                .onChange(async (value) => {
+                    this.plugin.settings.enableBackgroundScan = value;
+                    await this.plugin.saveSettings();
+                }));
+
         const colors = this.plugin.settings.monochromeColors
             .split(',')
             .map(c => c.trim())

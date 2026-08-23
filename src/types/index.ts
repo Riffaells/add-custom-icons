@@ -14,6 +14,9 @@ export interface AddCustomIconsSettings {
 	monochromeColors: string;
 	iconsPathType: 'plugin' | 'vault' | 'custom';
 	customIconsPath: string;
+	/** When off, icons are only (re)loaded from cache.json/data.json and via the
+	 * manual "Reload Icons" action — no automatic scan runs after startup. */
+	enableBackgroundScan: boolean;
 }
 
 export interface IconCache {
@@ -33,6 +36,9 @@ export interface IconFile {
 	name: string;
 	path: string;
 	prefix: string;
+	/** Pre-fetched from an already-loaded TFile when the icons folder lives inside
+	 * the vault, so checkIconCache can skip a redundant adapter.stat() call. */
+	stat?: FileStat;
 }
 
 export interface ProcessIconResult {
@@ -51,4 +57,16 @@ export interface InstalledPlugin {
 export interface FileStat {
     mtime: number;
     size: number;
+}
+
+/**
+ * On-disk shape of cache.json — a plugin-local file written directly via the
+ * vault adapter (not through loadData/saveData), so normalized SVG content
+ * never bloats data.json. `colorsKey` records the monochrome color list the
+ * entries were normalized under; a mismatch on load means the entries are
+ * stale and must be discarded.
+ */
+export interface IconContentCacheFile {
+	colorsKey: string;
+	entries: Record<string, string>;
 }
