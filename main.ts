@@ -20,14 +20,16 @@ export default class AddCustomIconsPlugin extends Plugin {
 			await this.loadSettings();
 			this.logger = new Logger(this.settings.debugMode, 'AddCustomIcons');
 			this.initializeServices();
+			// Register cached icons before other plugins can snapshot Obsidian's
+			// icon registry during their own startup.
+			await this.restoreCachedIcons();
 			this.registerCommands();
 			this.addSettingTab(new AddCustomIconsSettingTab(this.app, this));
 
-			// Per Obsidian's load-time guide, defer all expensive I/O (reading and
-			// parsing SVG files) until after the workspace is ready. This prevents
-			// blocking Obsidian's startup with disk reads for hundreds of icons.
+			// Defer the recursive filesystem scan and cache update until after the
+			// workspace is ready.
 			this.app.workspace.onLayoutReady(() => {
-				void this.initializeIconsAfterLayout();
+				this.scheduleBackgroundIconLoad();
 			});
 		} catch (error) {
 			this.logger?.error('Failed to load Add Custom Icons plugin:', error);
@@ -35,27 +37,20 @@ export default class AddCustomIconsPlugin extends Plugin {
 	}
 
 	/**
-	 * Restores cached icons and triggers a background scan for changes.
-	 * Runs after layout is ready so it doesn't block app startup.
+	 * Restores known icons early enough for plugins that read the icon registry
+	 * during module initialization. The slower discovery scan remains deferred.
 	 */
-	private async initializeIconsAfterLayout(): Promise<void> {
-		try {
-			this.iconLoader.setIconsPath(this.settings.iconsPathType, this.settings.customIconsPath);
+	private async restoreCachedIcons(): Promise<void> {
+		this.iconLoader.setIconsPath(this.settings.iconsPathType, this.settings.customIconsPath);
 
-			if (this.iconCache._cacheVersion === CONFIG.CACHE_VERSION) {
-				this.logger.debug(`Loaded icon cache with ${Object.keys(this.iconCache).length - 1} entries`);
-				await this.iconLoader.restoreIconsFromCache(this.iconCache, this.settings.monochromeColors);
-				// Notify other plugins (e.g. Notebook Navigator) that icons are now in Obsidian's registry.
-				window.dispatchEvent(new CustomEvent('add-custom-icons:loaded'));
-			} else {
-				this.logger.debug('Cache version mismatch or no cache found, will create new cache');
-				this.iconCache = { _cacheVersion: CONFIG.CACHE_VERSION };
-			}
-
-			// Schedule a background scan to detect added/changed/deleted icons.
-			this.scheduleBackgroundIconLoad();
-		} catch (error) {
-			this.logger.error('Error initializing icons:', error);
+		if (this.iconCache._cacheVersion === CONFIG.CACHE_VERSION) {
+			this.logger.debug(`Loaded icon cache with ${Object.keys(this.iconCache).length - 1} entries`);
+			await this.iconLoader.restoreIconsFromCache(this.iconCache, this.settings.monochromeColors);
+			// Notify already-loaded integrations that the icons are available.
+			window.dispatchEvent(new CustomEvent('add-custom-icons:loaded'));
+		} else {
+			this.logger.debug('Cache version mismatch or no cache found, will create new cache');
+			this.iconCache = { _cacheVersion: CONFIG.CACHE_VERSION };
 		}
 	}
 
