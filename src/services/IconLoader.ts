@@ -26,9 +26,16 @@ export class IconLoader {
 	 * Paths restoreIconsFromCache just verified fresh (stat mtime/size match)
 	 * this session. One-shot: consumed by the very next loadIcons() call made
 	 * with `trustRecentRestore: true`, then cleared, so it can never be reused
-	 * by a later, unrelated scan.
+	 * by a later, unrelated scan. Also discarded outright if too much time has
+	 * passed (see MAX_TRUST_WINDOW_MS) - the background scan is now scheduled
+	 * via requestIdleCallback, which can fire anywhere up to
+	 * CONFIG.BACKGROUND_LOAD_IDLE_TIMEOUT later, and an icon edited on disk in
+	 * that window shouldn't be able to hide behind a stale verification.
 	 */
 	private lastRestoreVerifiedPaths: Set<string> | null = null;
+	private lastRestoreVerifiedAt: number | null = null;
+	/** How long a restore-time freshness check stays trustworthy for the background scan that follows. */
+	private static readonly MAX_TRUST_WINDOW_MS = 3000;
 
 	constructor(app: App, manifestDir: string, logger: Logger) {
 		this.app = app;
@@ -37,19 +44,10 @@ export class IconLoader {
 		this.contentCacheStore = new IconContentCacheStore(app, manifestDir, logger);
 	}
 
-	/**
-	 * Sets the icons path configuration
-	 */
 	setIconsPath(pathType: 'plugin' | 'vault' | 'custom', customPath: string = ''): void {
 		this.scanner.setIconsPath(pathType, customPath);
 	}
 
-	/**
-	 * Loads icons from the icons folder and updates the cache
-	 * @param iconCache - Current icon cache with metadata
-	 * @param monochromeColors - Comma-separated list of colors to convert to currentColor
-	 * @returns Object containing loaded count, changed count, and updated cache
-	 */
 	async loadIcons(iconCache: IconCache, monochromeColors: string, options?: { trustRecentRestore?: boolean }): Promise<{
 		loadedCount: number;
 		changedCount: number;
@@ -57,19 +55,24 @@ export class IconLoader {
 	}> {
 		const startTime = performance.now();
 		// One-shot: only the scan this flag is intended for gets to skip
-		// verification. Any other call (including a later one made without the
-		// flag, e.g. the user-triggered "Reload Icons" command) always clears it
-		// so it can never be silently reused to skip a real freshness check.
-		const skipVerifyPaths = options?.trustRecentRestore ? (this.lastRestoreVerifiedPaths ?? undefined) : undefined;
+		// verification, and only if that restore is still recent enough to
+		// trust (see MAX_TRUST_WINDOW_MS). Any other call (including a later
+		// one made without the flag, e.g. the user-triggered "Reload Icons"
+		// command) always clears it so it can never be silently reused to skip
+		// a real freshness check.
+		const verifiedRecently = this.lastRestoreVerifiedAt !== null
+			&& (performance.now() - this.lastRestoreVerifiedAt) <= IconLoader.MAX_TRUST_WINDOW_MS;
+		const skipVerifyPaths = (options?.trustRecentRestore && verifiedRecently)
+			? (this.lastRestoreVerifiedPaths ?? undefined)
+			: undefined;
 		this.lastRestoreVerifiedPaths = null;
+		this.lastRestoreVerifiedAt = null;
 		try {
 			const result = await this.loadIconsInternal(iconCache, monochromeColors, skipVerifyPaths);
-			this.lastLoadDurationMs = performance.now() - startTime;
-			this.logger.debug(`Icon load finished in ${this.lastLoadDurationMs.toFixed(1)}ms (${result.loadedCount} icons, ${result.changedCount} changed)`);
+			this.logger.debug(`Icon load finished in ${(performance.now() - startTime).toFixed(1)}ms (${result.loadedCount} icons, ${result.changedCount} changed)`);
 			return result;
-		} catch (error) {
+		} finally {
 			this.lastLoadDurationMs = performance.now() - startTime;
-			throw error;
 		}
 	}
 
@@ -93,24 +96,14 @@ export class IconLoader {
 		try {
 			this.logger.debug('Scanning for icons...');
 
-			// TEMPORARY diagnostic timing - narrows down where the background
-			// scan's wall-clock time actually goes (restore-time proved the
-			// per-icon loop itself is ~0ms when everything is cache-hit).
-			let tMark = performance.now();
-			const mark = (label: string) => {
-				const now = performance.now();
-				this.logger.debug(`  [timing] ${label}: ${(now - tMark).toFixed(1)}ms`);
-				tMark = now;
-			};
-
 			// listSvgFiles already resolves a missing/unreadable folder to an
 			// empty list on its own (both the vault-index and adapter.list()
 			// code paths swallow that case) - a separate folderExists()
 			// pre-check was a second full round-trip stat() for no functional
 			// benefit, and every extra await here is another chance to land in
-			// contended startup I/O (see loadIconsInBackground for why that matters).
+			// contended startup I/O (see main.ts's scheduleBackgroundIconLoad
+			// for why that matters).
 			const svgFiles = await this.scanner.listSvgFiles(iconsFolderPath);
-			mark('listSvgFiles');
 
 			this.logger.debug(`Found ${svgFiles.length} SVG icons. Processing...`);
 
@@ -122,17 +115,13 @@ export class IconLoader {
 			// Reset collision tracker before each full load pass
 			HelperUtils.resetIdRegistry();
 			const results = await this.processIconsInBatches(svgFiles, iconCache, skipVerifyPaths);
-			mark('processIconsInBatches');
 			const {newCache, changedCount} = this.updateIconCache(results);
-			mark('updateIconCache');
 
 			// Drop content-cache entries for icons that no longer exist, so
 			// cache.json doesn't accumulate stale content for deleted files.
 			const validPaths = new Set(results.map(result => result.path));
 			this.contentCacheStore.pruneToPaths(validPaths);
-			mark('pruneToPaths');
 			await this.contentCacheStore.persistIfDirty(monochromeColors);
-			mark('persistIfDirty');
 
 			return {
 				loadedCount: svgFiles.length,
@@ -145,22 +134,14 @@ export class IconLoader {
 		}
 	}
 
-	/**
-	 * Restores icons from cache by loading them from disk
-	 * @param iconCache - Icon cache with metadata
-	 * @param monochromeColors - Comma-separated list of colors to convert
-	 * @returns Number of icons restored
-	 */
 	async restoreIconsFromCache(iconCache: IconCache, monochromeColors: string): Promise<number> {
 		const startTime = performance.now();
 		try {
 			const restoredCount = await this.restoreIconsFromCacheInternal(iconCache, monochromeColors);
-			this.lastRestoreDurationMs = performance.now() - startTime;
-			this.logger.debug(`Icon restore finished in ${this.lastRestoreDurationMs.toFixed(1)}ms (${restoredCount} icons)`);
+			this.logger.debug(`Icon restore finished in ${(performance.now() - startTime).toFixed(1)}ms (${restoredCount} icons)`);
 			return restoredCount;
-		} catch (error) {
+		} finally {
 			this.lastRestoreDurationMs = performance.now() - startTime;
-			throw error;
 		}
 	}
 
@@ -188,8 +169,10 @@ export class IconLoader {
 
 		// Hand this set to the background full scan that follows shortly after
 		// (main.ts passes trustRecentRestore: true), so it can skip re-stat()'ing
-		// every path we just verified fresh a moment ago.
+		// every path we just verified fresh a moment ago - as long as that scan
+		// actually runs soon (see MAX_TRUST_WINDOW_MS in loadIcons()).
 		this.lastRestoreVerifiedPaths = verifiedPaths;
+		this.lastRestoreVerifiedAt = performance.now();
 
 		// The background scan that follows shortly after skips re-reading any
 		// path already in registeredPaths, so this is the only chance to persist
@@ -214,7 +197,8 @@ export class IconLoader {
 			// stat() is cheap (no file content read) - verifying it here means an
 			// icon edited while Obsidian was closed shows its new content right
 			// away, instead of the stale cached version until the background scan
-			// catches up ~200ms later.
+			// catches up (see MAX_TRUST_WINDOW_MS above for how long that scan can
+			// still skip re-verifying it).
 			try {
 				const stat = await this.app.vault.adapter.stat(path);
 				if (stat && stat.mtime === meta.mtime && stat.size === meta.size) {
@@ -257,12 +241,10 @@ export class IconLoader {
 		}
 	}
 
-	// Метод для получения статистики использования памяти
 	getMemoryStats(): { total: number; lastLoadMs: number | null; lastRestoreMs: number | null } {
-		// Упрощенная статистика - просто общее количество
 		const cacheKeys = Object.keys(this.iconCache || {});
 		return {
-			total: cacheKeys.length > 0 ? cacheKeys.length - 1 : 0, // -1 для _cacheVersion
+			total: cacheKeys.length > 0 ? cacheKeys.length - 1 : 0, // -1 for _cacheVersion
 			lastLoadMs: this.lastLoadDurationMs,
 			lastRestoreMs: this.lastRestoreDurationMs,
 		};
@@ -272,6 +254,7 @@ export class IconLoader {
 	dispose(): void {
 		this.registeredPaths.clear();
 		this.lastRestoreVerifiedPaths = null;
+		this.lastRestoreVerifiedAt = null;
 		HelperUtils.clearCaches();
 		this.contentCacheStore.reset();
 	}
@@ -415,7 +398,8 @@ export class IconLoader {
 		const rawSvgContent = await this.app.vault.adapter.read(icon.path);
 		const svgContent = HelperUtils.normalizeSvgContent(rawSvgContent, this.monochromeColors);
 
-		// Сохраняем только метаданные, не SVG контент
+		// Only metadata is cached here - the SVG content itself lives in
+		// contentCacheStore (cache.json), kept out of data.json.
 		const cacheEntry: IconCacheEntry = {
 			mtime: fileStat.mtime,
 			size: fileStat.size,

@@ -188,10 +188,11 @@ export default class AddCustomIconsPlugin extends Plugin {
 		try {
 			this.iconLoader.setIconsPath(this.settings.iconsPathType, this.settings.customIconsPath);
 
-			// This scan runs right after initializeIconsFromCache() restored and
-			// stat()-verified every cached icon, so it can trust that work instead
-			// of re-verifying the same paths - it only needs to discover icons the
-			// restore pass didn't already see (new/changed/deleted files).
+			// This scan runs shortly after initializeIconsFromCache() restored and
+			// stat()-verified every cached icon, so - as long as that verification
+			// is still recent (IconLoader.MAX_TRUST_WINDOW_MS) - it can trust that
+			// work instead of re-verifying the same paths, and only needs to
+			// discover icons the restore pass didn't already see (new/changed/deleted files).
 			const result = await this.iconLoader.loadIcons(this.iconCache, this.settings.monochromeColors, { trustRecentRestore: true });
 			this.iconCache = result.newCache;
 			this.loadedIconsCount = result.loadedCount;
