@@ -102,7 +102,7 @@ export default {
     },
     fixModal: {
         title: "Fix icon: {id}",
-        desc: "Select the colors that should follow the theme. The preview updates instantly. Applying updates only this icon — no rescan needed.",
+        desc: "Select the colors that should follow the theme. The preview updates instantly. Applying updates only this icon - no rescan needed.",
         noColors: "No fixed colors found in this icon",
         alreadyAdded: "Already in the list",
         apply: "Apply fix",

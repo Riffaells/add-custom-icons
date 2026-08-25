@@ -10,8 +10,10 @@ export const CONFIG = {
 	CACHE_VERSION: 2,
 	MAX_SCAN_DEPTH: 20,
 	BACKGROUND_LOAD_DELAY: 200,
+	/** Max wait for requestIdleCallback before it fires anyway, even if the main thread never reports idle. */
+	BACKGROUND_LOAD_IDLE_TIMEOUT: 5000,
 	/** Concurrency cap for parallel file stat()/read() calls during scan and cache restore. */
-	IO_CONCURRENCY: 16,
+	IO_CONCURRENCY: 32,
 	PLUGIN_RELOAD_DELAYS: {
 		BASE: 500,
 		INCREMENT: 100,

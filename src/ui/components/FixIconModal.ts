@@ -8,7 +8,7 @@ import { t } from '../../lang/helpers';
  * lets the user pick which of them should be converted to currentColor. The
  * preview re-renders from the raw SVG on every toggle so the user sees the
  * result before committing. Applying updates only this one icon directly via
- * addIcon() — no vault-wide rescan — and persists the color(s) in settings so
+ * addIcon() - no vault-wide rescan - and persists the color(s) in settings so
  * future loads pick them up too.
  */
 export class FixIconModal extends Modal {
@@ -156,7 +156,7 @@ export class FixIconModal extends Modal {
         await this.plugin.saveSettings();
 
         // Update just this one icon in Obsidian's registry directly, instead of
-        // triggering a full folder rescan — the fix should feel instant even in
+        // triggering a full folder rescan - the fix should feel instant even in
         // vaults with hundreds of icons. Other icons pick up the new color list
         // the next time they're loaded (background scan, manual reload, restart).
         const normalized = HelperUtils.normalizeSvgContent(this.rawSvg, current.join(','));

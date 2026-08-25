@@ -127,7 +127,7 @@ export class IconsBrowserModal extends Modal {
             });
             setIcon(fixBtn, 'paintbrush');
             const openFixModal = () => {
-                // Re-render just this item's preview instead of the whole grid —
+                // Re-render just this item's preview instead of the whole grid -
                 // applying a fix is now a targeted single-icon update, so a full
                 // filterIcons() re-render would be needlessly expensive.
                 new FixIconModal(this.app, this.plugin, path, iconId, () => setIcon(preview, iconId)).open();
@@ -152,7 +152,7 @@ export class IconsBrowserModal extends Modal {
     }
 
     onClose() {
-        // Abort the scroll listener — works even if the grid element is already gone.
+        // Abort the scroll listener - works even if the grid element is already gone.
         this.scrollAbortController?.abort();
         this.scrollAbortController = null;
 

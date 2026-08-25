@@ -15,7 +15,7 @@ export interface AddCustomIconsSettings {
 	iconsPathType: 'plugin' | 'vault' | 'custom';
 	customIconsPath: string;
 	/** When off, icons are only (re)loaded from cache.json/data.json and via the
-	 * manual "Reload Icons" action — no automatic scan runs after startup. */
+	 * manual "Reload Icons" action - no automatic scan runs after startup. */
 	enableBackgroundScan: boolean;
 }
 
@@ -60,7 +60,7 @@ export interface FileStat {
 }
 
 /**
- * On-disk shape of cache.json — a plugin-local file written directly via the
+ * On-disk shape of cache.json - a plugin-local file written directly via the
  * vault adapter (not through loadData/saveData), so normalized SVG content
  * never bloats data.json. `colorsKey` records the monochrome color list the
  * entries were normalized under; a mismatch on load means the entries are

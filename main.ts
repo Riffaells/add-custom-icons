@@ -1,7 +1,9 @@
 import { Plugin, Notice } from 'obsidian';
 import { AddCustomIconsSettings, IconCache, IconCacheEntry } from './src/types';
-import { DEFAULT_SETTINGS, CONFIG } from './src/utils/constants';import { IconLoader } from './src/services/IconLoader';
+import { DEFAULT_SETTINGS, CONFIG } from './src/utils/constants';
+import { IconLoader } from './src/services/IconLoader';
 import { PluginManager } from './src/services/PluginManager';
+import { parsePluginData } from './src/services/settingsStore';
 import { AddCustomIconsSettingTab } from './src/ui/SettingsTab';
 import { Logger } from './src/utils/logger';
 import { t } from './src/lang/helpers';
@@ -23,22 +25,29 @@ export default class AddCustomIconsPlugin extends Plugin {
 			this.registerCommands();
 			this.addSettingTab(new AddCustomIconsSettingTab(this.app, this));
 
-			// Per Obsidian's load-time guide, defer all expensive I/O (reading and
-			// parsing SVG files) until after the workspace is ready. This prevents
-			// blocking Obsidian's startup with disk reads for hundreds of icons.
+			// Restore icons from cache synchronously during onload(), not deferred
+			// to onLayoutReady(). Some plugins (e.g. Iconic) snapshot the icon list
+			// at module-evaluation time via getIconIds() - if our icons aren't
+			// registered yet by then, they're missing from that snapshot for the
+			// rest of the session, even after a later restart. restoreIconsFromCache
+			// reuses cache.json's pre-normalized content, so this is a fast path
+			// (a stat() + addIcon() per icon), not a full disk read+parse.
+			// See: https://github.com/Riffaells/add-custom-icons/issues/3
+			await this.initializeIconsFromCache();
+
+			// Defer the slower full filesystem scan (detecting added/changed/
+			// deleted icons) until the workspace is ready, so it doesn't block
+			// Obsidian's startup.
 			this.app.workspace.onLayoutReady(() => {
-				void this.initializeIconsAfterLayout();
+				this.scheduleBackgroundIconLoad();
 			});
 		} catch (error) {
 			this.logger?.error('Failed to load Add Custom Icons plugin:', error);
 		}
 	}
 
-	/**
-	 * Restores cached icons and triggers a background scan for changes.
-	 * Runs after layout is ready so it doesn't block app startup.
-	 */
-	private async initializeIconsAfterLayout(): Promise<void> {
+	/** Restores cached icons into Obsidian's registry. Runs during onload(), before layout is ready. */
+	private async initializeIconsFromCache(): Promise<void> {
 		try {
 			this.iconLoader.setIconsPath(this.settings.iconsPathType, this.settings.customIconsPath);
 
@@ -51,9 +60,6 @@ export default class AddCustomIconsPlugin extends Plugin {
 				this.logger.debug('Cache version mismatch or no cache found, will create new cache');
 				this.iconCache = { _cacheVersion: CONFIG.CACHE_VERSION };
 			}
-
-			// Schedule a background scan to detect added/changed/deleted icons.
-			this.scheduleBackgroundIconLoad();
 		} catch (error) {
 			this.logger.error('Error initializing icons:', error);
 		}
@@ -109,10 +115,13 @@ export default class AddCustomIconsPlugin extends Plugin {
 	/** Public: reachable both from the command palette and the debug settings row. */
 	showMemoryStats(): void {
 		const stats = this.iconLoader.getMemoryStats();
+		const formatMs = (ms: number | null) => ms === null ? 'n/a' : `${ms.toFixed(0)}ms`;
 		const message = `Icon Statistics:
 • Total icons loaded: ${stats.total}
 • Cache optimization: SVG content not stored in cache
-• Memory usage: Significantly reduced vs. previous version`;
+• Memory usage: Significantly reduced vs. previous version
+• Last cache restore: ${formatMs(stats.lastRestoreMs)}
+• Last folder scan: ${formatMs(stats.lastLoadMs)}`;
 
 		new Notice(message, 5000);
 		this.logger.debug('Icon Stats:', stats);
@@ -124,57 +133,37 @@ export default class AddCustomIconsPlugin extends Plugin {
 			return;
 		}
 
-		// Store the timeout id and clear it on unload to avoid the callback
-		// firing on a disposed plugin.
-		const timeoutId = window.setTimeout(() => {
+		const runLoad = () => {
 			if (this.isLoading) {
 				this.logger.debug('Icon loading already in progress, skipping scheduled load');
 				return;
 			}
 			void this.loadIconsInBackground();
-		}, CONFIG.BACKGROUND_LOAD_DELAY);
+		};
 
-		this.register(() => window.clearTimeout(timeoutId));
+		// A flat setTimeout(200ms) right after onLayoutReady can land in the
+		// middle of every other plugin's own layout-ready/onload work, all
+		// competing for the single JS main thread - observed in practice as a
+		// single adapter.stat() call taking 3.5s+ purely from queueing behind
+		// unrelated synchronous work, not from the I/O itself. requestIdleCallback
+		// waits for the thread to actually be free, so the scan starts as soon as
+		// there's real idle time instead of at a fixed clock offset that may or
+		// may not be quiet. The timeout still guarantees it runs even if the
+		// thread never reports idle.
+		if (typeof window.requestIdleCallback === 'function') {
+			const idleId = window.requestIdleCallback(runLoad, {timeout: CONFIG.BACKGROUND_LOAD_IDLE_TIMEOUT});
+			this.register(() => window.cancelIdleCallback(idleId));
+		} else {
+			const timeoutId = window.setTimeout(runLoad, CONFIG.BACKGROUND_LOAD_DELAY);
+			this.register(() => window.clearTimeout(timeoutId));
+		}
 	}
 
 	async loadSettings(): Promise<void> {
 		const data = await this.loadData() as Record<string, unknown> | null;
-
-		if (!data) {
-			this.settings = Object.assign({}, DEFAULT_SETTINGS);
-			return;
-		}
-
-		// New format: { settings: {...}, cache: {...} }
-		if (data.settings && typeof data.settings === 'object') {
-			this.settings = Object.assign({}, DEFAULT_SETTINGS, data.settings as Partial<AddCustomIconsSettings>);
-			this.iconCache = (data.cache as IconCache) ?? { _cacheVersion: CONFIG.CACHE_VERSION };
-		// Legacy format: cache entries mixed with settings at the top level
-		} else if (typeof data._cacheVersion === 'number') {
-			const { enableAutoRestart, restartTarget, selectedPlugins, debugMode, monochromeColors, iconsPathType, customIconsPath, ...cacheData } = data;
-			this.settings = Object.assign({}, DEFAULT_SETTINGS, {
-				enableAutoRestart,
-				restartTarget,
-				selectedPlugins: (selectedPlugins as string[]) || [],
-				debugMode,
-				monochromeColors,
-				iconsPathType: (iconsPathType as 'plugin' | 'vault' | 'custom') || 'plugin',
-				customIconsPath: (customIconsPath as string) || ''
-			});
-			this.iconCache = cacheData as unknown as IconCache;
-		} else {
-			this.settings = Object.assign({}, DEFAULT_SETTINGS, data);
-		}
-
-		if (!this.settings.selectedPlugins) this.settings.selectedPlugins = [];
-		if (!this.settings.iconsPathType) this.settings.iconsPathType = 'plugin';
-		if (!this.settings.customIconsPath) this.settings.customIconsPath = '';
-		// The legacy branch above can Object.assign an explicit `undefined` over
-		// the default (destructured keys missing from old data.json), which would
-		// crash any .split() caller like FixIconModal.
-		if (typeof this.settings.monochromeColors !== 'string') {
-			this.settings.monochromeColors = DEFAULT_SETTINGS.monochromeColors;
-		}
+		const { settings, cache } = parsePluginData(data);
+		this.settings = settings;
+		this.iconCache = cache;
 	}
 
 	async saveSettings(): Promise<void> {
@@ -199,7 +188,11 @@ export default class AddCustomIconsPlugin extends Plugin {
 		try {
 			this.iconLoader.setIconsPath(this.settings.iconsPathType, this.settings.customIconsPath);
 
-			const result = await this.iconLoader.loadIcons(this.iconCache, this.settings.monochromeColors);
+			// This scan runs right after initializeIconsFromCache() restored and
+			// stat()-verified every cached icon, so it can trust that work instead
+			// of re-verifying the same paths - it only needs to discover icons the
+			// restore pass didn't already see (new/changed/deleted files).
+			const result = await this.iconLoader.loadIcons(this.iconCache, this.settings.monochromeColors, { trustRecentRestore: true });
 			this.iconCache = result.newCache;
 			this.loadedIconsCount = result.loadedCount;
 

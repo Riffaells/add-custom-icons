@@ -2,6 +2,7 @@ import { App, Notice, Plugin } from 'obsidian';
 import { InstalledPlugin } from '../types';
 import { Logger } from '../utils/logger';
 import { CONFIG } from '../utils/constants';
+import { t } from '../lang/helpers';
 
 interface PluginWithReload extends Plugin {
 	reload?: () => void;
@@ -117,7 +118,7 @@ export class PluginManager {
 	 */
 	triggerObsidianRestart(): void {
 		this.logger.debug('Triggering Obsidian restart');
-		new Notice('Restarting Obsidian...');
+		new Notice(t('notices.restartingObsidian'));
 
 		window.setTimeout(() => {
 			this.app.commands.executeCommandById('app:reload');
