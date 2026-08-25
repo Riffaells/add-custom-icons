@@ -1,7 +1,7 @@
 # vscode
 .vscode
 .history
-icons
+/icons
 
 # Intellij
 *.iml
