@@ -15,6 +15,17 @@ import { createDebugSection } from './legacySettings/debugSection';
  */
 const STRUCTURAL_KEYS: ReadonlySet<string> = new Set<SettingsKey>(['iconsPathType', 'customIconsPath', 'restartTarget']);
 
+/**
+ * The declarative-settings hooks Obsidian 1.13 added to `PluginSettingTab`.
+ * The plugin's minAppVersion is lower than that on purpose - older versions
+ * render the legacy `display()` path instead - so these are reached through a
+ * capability check rather than called directly.
+ */
+interface DeclarativeSettingTabApi {
+    update?: () => void;
+    refreshDomState?: () => void;
+}
+
 export class AddCustomIconsSettingTab extends PluginSettingTab {
 
     icon = "image-down";
@@ -30,14 +41,14 @@ export class AddCustomIconsSettingTab extends PluginSettingTab {
         this.ctx = {
             app,
             plugin,
-            update: () => this.update(),
+            update: () => this.requestRebuild(),
             pendingColor: false,
             focusColorIndex: null,
         };
         this.legacyCtx = {
             app,
             plugin,
-            redisplay: () => this.display(),
+            redisplay: () => this.renderLegacy(),
         };
     }
 
@@ -66,10 +77,20 @@ export class AddCustomIconsSettingTab extends PluginSettingTab {
         await this.plugin.saveSettings();
 
         if (STRUCTURAL_KEYS.has(key)) {
-            this.update();
+            this.requestRebuild();
         } else {
-            this.refreshDomState();
+            this.requestDomRefresh();
         }
+    }
+
+    /** Rebuilds the definition tree (1.13+ only; see DeclarativeSettingTabApi). */
+    private requestRebuild(): void {
+        (this as DeclarativeSettingTabApi).update?.();
+    }
+
+    /** Re-evaluates visible/disabled predicates without rebuilding (1.13+ only). */
+    private requestDomRefresh(): void {
+        (this as DeclarativeSettingTabApi).refreshDomState?.();
     }
 
     /* ===== Legacy: Obsidian < 1.13 =====
@@ -78,6 +99,12 @@ export class AddCustomIconsSettingTab extends PluginSettingTab {
        debug toggle) so nothing regresses for users who haven't updated. */
 
     display(): void {
+        this.renderLegacy();
+    }
+
+    /** The legacy rendering itself, kept separate from the deprecated
+     * `display()` entry point so internal redraws don't call a deprecated API. */
+    private renderLegacy(): void {
         const { containerEl } = this;
         containerEl.empty();
 

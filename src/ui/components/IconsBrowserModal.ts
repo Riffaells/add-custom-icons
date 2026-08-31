@@ -60,7 +60,7 @@ export class IconsBrowserModal extends Modal {
                 return false;
             }
             const name = path.split('/').pop()?.toLowerCase() ?? '';
-            const id = ((entry as IconCacheEntry).iconId ?? '').toLowerCase();
+            const id = (entry.iconId ?? '').toLowerCase();
             const lowerFilter = filter.toLowerCase();
             return name.includes(lowerFilter) || id.includes(lowerFilter);
         });

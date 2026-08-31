@@ -62,13 +62,13 @@ export class FolderSuggest extends AbstractInputSuggest<string> {
         
         el.empty();
         
-        el.createEl('div', { 
+        el.createDiv({ 
             cls: 'suggestion-title',
             text: folderName 
         });
         
         if (parts.length > 1) {
-            el.createEl('div', { 
+            el.createDiv({ 
                 cls: 'suggestion-note',
                 text: normalized
             });
@@ -85,6 +85,9 @@ export class FolderSuggest extends AbstractInputSuggest<string> {
     private getAllFolders(): string[] {
         const folders: string[] = [];
         const root = this.app.vault.getRoot();
+        // The config folder is user-configurable, so read its actual name
+        // instead of assuming '.obsidian'.
+        const configDir = this.app.vault.configDir;
 
         const collectFolders = (folder: TFolder) => {
             for (const child of folder.children) {
@@ -92,7 +95,7 @@ export class FolderSuggest extends AbstractInputSuggest<string> {
                 
                 const path = child.path;
                 
-                if (path.startsWith('.obsidian') || path.startsWith('.trash') || path.startsWith('.git')) {
+                if (path.startsWith(configDir) || path.startsWith('.trash') || path.startsWith('.git')) {
                     continue;
                 }
                 

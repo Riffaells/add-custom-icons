@@ -130,8 +130,16 @@ export class FixIconModal extends Modal {
     private updatePreview(): void {
         const normalized = HelperUtils.normalizeSvgContent(this.rawSvg, this.tentativeColorsString());
         this.previewEl.empty();
-        if (normalized) {
-            this.previewEl.innerHTML = normalized;
+        if (!normalized) {
+            return;
+        }
+
+        // Parsed into a node rather than assigned to innerHTML: the preview
+        // renders arbitrary SVG files from the user's icons folder, so the
+        // markup never goes through the HTML parser.
+        const svgEl = HelperUtils.parseSvgElement(normalized);
+        if (svgEl) {
+            this.previewEl.appendChild(svgEl);
         }
     }
 

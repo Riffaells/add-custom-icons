@@ -41,6 +41,14 @@ export interface IconFile {
 	stat?: FileStat;
 }
 
+/** Outcome of the startup pass that registers cached icons (see IconLoader.restoreIconsFromCache). */
+export interface RestoreResult {
+	/** Icons registered straight from the content cache. */
+	restoredCount: number;
+	/** Cached icons with no content in cache.json - they need the background scan to read them from disk. */
+	missingCount: number;
+}
+
 export interface ProcessIconResult {
 	path: string;
 	data: IconCacheEntry;

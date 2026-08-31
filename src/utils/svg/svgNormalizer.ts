@@ -291,6 +291,23 @@ function normalizeSvgContentFallback(rawSvgContent: string, monochromeColors: st
 	return svgContent;
 }
 
+/**
+ * Parses already-normalized SVG markup into a live element that can be
+ * appended to the DOM. Used instead of assigning to innerHTML, which would
+ * hand raw markup to the HTML parser; here the markup goes through the XML
+ * parser and only the resulting <svg> node is imported, so nothing outside it
+ * (stray script/HTML siblings) can reach the document. Returns null when the
+ * markup doesn't parse as SVG.
+ */
+export function parseSvgElement(svgMarkup: string): SVGElement | null {
+	const doc = domParser.parseFromString(svgMarkup, 'image/svg+xml');
+	if (doc.querySelector('parsererror')) {
+		return null;
+	}
+	const svgEl = doc.querySelector('svg');
+	return svgEl ? (document.importNode(svgEl, true)) : null;
+}
+
 /** Releases the fallback-path regex cache. Called on plugin unload. */
 export function clearSvgNormalizerCaches(): void {
 	colorRegexCache.clear();

@@ -29,7 +29,7 @@ export default {
             errorOpening: "Failed to open icons folder",
             backgroundScan: {
                 name: "Scan for changes on startup",
-                desc: "Shortly after Obsidian starts, re-scan the icons folder to pick up added, removed, or edited icons. Turn off to only load from cache and rely on the \"Reload Icons\" button.",
+                desc: "Shortly after Obsidian starts, re-scan the icons folder to pick up added, removed, or edited icons. Turn off to only load from cache and rely on the \"Reload Icons\" button - icons the cache does not cover are still scanned once.",
             },
         },
         colors: {

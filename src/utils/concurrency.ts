@@ -10,7 +10,7 @@ export async function runWithConcurrency<T, R>(
 	concurrency: number,
 	yieldEveryMs = 16
 ): Promise<R[]> {
-	const results: R[] = new Array(items.length);
+	const results = new Array<R>(items.length);
 	let nextIndex = 0;
 	let lastYield = performance.now();
 

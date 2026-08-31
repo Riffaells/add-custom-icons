@@ -7,6 +7,9 @@ on:
 
 permissions:
   contents: write
+  # Required by actions/attest-build-provenance to sign the release assets.
+  id-token: write
+  attestations: write
 
 jobs:
   build-and-release:
@@ -14,16 +17,19 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: "20"
           cache: "npm"
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Lint
+        run: npm run lint
 
       - name: Build plugin
         run: npm run build
@@ -47,12 +53,22 @@ jobs:
 
           echo "✅ Version confirmed: $TAG_VERSION"
 
+      # Lets users verify the released files were built from this repository
+      # at this commit, instead of trusting the uploaded binaries blindly.
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: |
+            main.js
+            manifest.json
+            styles.css
+
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
           name: "${{ github.ref_name }}"
           files: |
-            build/main.js
-            build/manifest.json
-            build/styles.css
+            main.js
+            manifest.json
+            styles.css
