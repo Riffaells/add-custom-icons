@@ -1,5 +1,5 @@
 import {App, addIcon} from 'obsidian';
-import {IconFile, IconCache, IconCacheEntry, ProcessIconResult, FileStat} from '../types';
+import {IconFile, IconCache, IconCacheEntry, ProcessIconResult, FileStat, RestoreResult} from '../types';
 import {CONFIG} from '../utils/constants';
 import {HelperUtils} from '../utils/helpers';
 import {Logger} from '../utils/logger';
@@ -22,20 +22,6 @@ export class IconLoader {
 	/** Wall-clock time of the most recent loadIcons()/restoreIconsFromCache() call, for the debug stats panel. */
 	private lastLoadDurationMs: number | null = null;
 	private lastRestoreDurationMs: number | null = null;
-	/**
-	 * Paths restoreIconsFromCache just verified fresh (stat mtime/size match)
-	 * this session. One-shot: consumed by the very next loadIcons() call made
-	 * with `trustRecentRestore: true`, then cleared, so it can never be reused
-	 * by a later, unrelated scan. Also discarded outright if too much time has
-	 * passed (see MAX_TRUST_WINDOW_MS) - the background scan is now scheduled
-	 * via requestIdleCallback, which can fire anywhere up to
-	 * CONFIG.BACKGROUND_LOAD_IDLE_TIMEOUT later, and an icon edited on disk in
-	 * that window shouldn't be able to hide behind a stale verification.
-	 */
-	private lastRestoreVerifiedPaths: Set<string> | null = null;
-	private lastRestoreVerifiedAt: number | null = null;
-	/** How long a restore-time freshness check stays trustworthy for the background scan that follows. */
-	private static readonly MAX_TRUST_WINDOW_MS = 3000;
 
 	constructor(app: App, manifestDir: string, logger: Logger) {
 		this.app = app;
@@ -48,27 +34,14 @@ export class IconLoader {
 		this.scanner.setIconsPath(pathType, customPath);
 	}
 
-	async loadIcons(iconCache: IconCache, monochromeColors: string, options?: { trustRecentRestore?: boolean }): Promise<{
+	async loadIcons(iconCache: IconCache, monochromeColors: string): Promise<{
 		loadedCount: number;
 		changedCount: number;
 		newCache: IconCache
 	}> {
 		const startTime = performance.now();
-		// One-shot: only the scan this flag is intended for gets to skip
-		// verification, and only if that restore is still recent enough to
-		// trust (see MAX_TRUST_WINDOW_MS). Any other call (including a later
-		// one made without the flag, e.g. the user-triggered "Reload Icons"
-		// command) always clears it so it can never be silently reused to skip
-		// a real freshness check.
-		const verifiedRecently = this.lastRestoreVerifiedAt !== null
-			&& (performance.now() - this.lastRestoreVerifiedAt) <= IconLoader.MAX_TRUST_WINDOW_MS;
-		const skipVerifyPaths = (options?.trustRecentRestore && verifiedRecently)
-			? (this.lastRestoreVerifiedPaths ?? undefined)
-			: undefined;
-		this.lastRestoreVerifiedPaths = null;
-		this.lastRestoreVerifiedAt = null;
 		try {
-			const result = await this.loadIconsInternal(iconCache, monochromeColors, skipVerifyPaths);
+			const result = await this.loadIconsInternal(iconCache, monochromeColors);
 			this.logger.debug(`Icon load finished in ${(performance.now() - startTime).toFixed(1)}ms (${result.loadedCount} icons, ${result.changedCount} changed)`);
 			return result;
 		} finally {
@@ -76,7 +49,7 @@ export class IconLoader {
 		}
 	}
 
-	private async loadIconsInternal(iconCache: IconCache, monochromeColors: string, skipVerifyPaths?: ReadonlySet<string>): Promise<{
+	private async loadIconsInternal(iconCache: IconCache, monochromeColors: string): Promise<{
 		loadedCount: number;
 		changedCount: number;
 		newCache: IconCache
@@ -114,7 +87,7 @@ export class IconLoader {
 
 			// Reset collision tracker before each full load pass
 			HelperUtils.resetIdRegistry();
-			const results = await this.processIconsInBatches(svgFiles, iconCache, skipVerifyPaths);
+			const results = await this.processIconsInBatches(svgFiles, iconCache);
 			const {newCache, changedCount} = this.updateIconCache(results);
 
 			// Drop content-cache entries for icons that no longer exist, so
@@ -134,86 +107,66 @@ export class IconLoader {
 		}
 	}
 
-	async restoreIconsFromCache(iconCache: IconCache, monochromeColors: string): Promise<number> {
+	/**
+	 * Registers every cached icon into Obsidian's registry. This runs inside
+	 * onload(), i.e. on the critical path of Obsidian's startup, so it does
+	 * exactly one file read (cache.json) and no per-icon I/O at all: each icon
+	 * is registered straight from the already-parsed content cache.
+	 *
+	 * Nothing here checks whether the files still match what was cached -
+	 * stat()'ing thousands of icons was what made startup slow. Verification,
+	 * and reading whatever the content cache is missing, is the background
+	 * scan's job once the workspace is up; until it finishes, an icon edited
+	 * while Obsidian was closed briefly shows its previous content.
+	 *
+	 * `missingCount` reports icons this pass could not register because the
+	 * content cache had nothing for them - the caller uses it to force the
+	 * background load even when automatic scanning is turned off, so those
+	 * icons still show up.
+	 */
+	async restoreIconsFromCache(iconCache: IconCache, monochromeColors: string): Promise<RestoreResult> {
 		const startTime = performance.now();
 		try {
-			const restoredCount = await this.restoreIconsFromCacheInternal(iconCache, monochromeColors);
-			this.logger.debug(`Icon restore finished in ${(performance.now() - startTime).toFixed(1)}ms (${restoredCount} icons)`);
-			return restoredCount;
+			const result = await this.restoreIconsFromCacheInternal(iconCache, monochromeColors);
+			this.logger.debug(`Icon restore finished in ${(performance.now() - startTime).toFixed(1)}ms (${result.restoredCount} icons, ${result.missingCount} not cached)`);
+			return result;
 		} finally {
 			this.lastRestoreDurationMs = performance.now() - startTime;
 		}
 	}
 
-	private async restoreIconsFromCacheInternal(iconCache: IconCache, monochromeColors: string): Promise<number> {
+	private async restoreIconsFromCacheInternal(iconCache: IconCache, monochromeColors: string): Promise<RestoreResult> {
 		this.monochromeColors = monochromeColors;
 		this.iconCache = iconCache;
 		await this.contentCacheStore.ensureLoaded(monochromeColors);
+		// Entries normalized under a different color list are unusable; drop
+		// them here so they are re-read by the background scan instead of
+		// registering icons with the wrong colors.
+		this.contentCacheStore.invalidateIfColorsChanged(monochromeColors);
 
-		const entries: { iconId: string; path: string }[] = [];
+		let restoredCount = 0;
+		let missingCount = 0;
+
+		// A plain synchronous loop: addIcon() is just a registry write, so
+		// there is no I/O to overlap here and nothing to yield for - chunking
+		// it would only add scheduling overhead to Obsidian's startup.
 		for (const key in iconCache) {
 			if (key === '_cacheVersion') continue;
 			const cachedIcon = iconCache[key] as IconCacheEntry;
-			if (cachedIcon?.iconId) {
-				entries.push({ iconId: cachedIcon.iconId, path: key });
+			if (!cachedIcon?.iconId) continue;
+
+			const cachedContent = this.contentCacheStore.get(key);
+			if (!cachedContent) {
+				missingCount++;
+				continue;
 			}
+
+			addIcon(cachedIcon.iconId, cachedContent);
+			this.registeredPaths.add(key);
+			restoredCount++;
 		}
 
-		const verifiedPaths = new Set<string>();
-		const results = await runWithConcurrency(
-			entries,
-			e => this.restoreIcon(e.iconId, e.path, verifiedPaths),
-			CONFIG.IO_CONCURRENCY
-		);
-		const restoredCount = results.filter(Boolean).length;
-
-		// Hand this set to the background full scan that follows shortly after
-		// (main.ts passes trustRecentRestore: true), so it can skip re-stat()'ing
-		// every path we just verified fresh a moment ago - as long as that scan
-		// actually runs soon (see MAX_TRUST_WINDOW_MS in loadIcons()).
-		this.lastRestoreVerifiedPaths = verifiedPaths;
-		this.lastRestoreVerifiedAt = performance.now();
-
-		// The background scan that follows shortly after skips re-reading any
-		// path already in registeredPaths, so this is the only chance to persist
-		// content that was just read from disk (missing/stale cache.json case).
-		await this.contentCacheStore.persistIfDirty(monochromeColors);
-
-		return restoredCount;
-	}
-
-	/**
-	 * Registers an icon from the in-memory content cache when available,
-	 * skipping the disk read + DOMParser normalization entirely. Falls back to
-	 * a normal file read on a cache miss (first run, a stale/missing
-	 * cache.json, or a file edited on disk since the cache was written), which
-	 * also repopulates the cache for next time.
-	 */
-	private async restoreIcon(iconId: string, path: string, verifiedPaths: Set<string>): Promise<boolean> {
-		const cachedContent = this.contentCacheStore.get(path);
-		const meta = this.iconCache[path] as IconCacheEntry | undefined;
-
-		if (cachedContent && meta) {
-			// stat() is cheap (no file content read) - verifying it here means an
-			// icon edited while Obsidian was closed shows its new content right
-			// away, instead of the stale cached version until the background scan
-			// catches up (see MAX_TRUST_WINDOW_MS above for how long that scan can
-			// still skip re-verifying it).
-			try {
-				const stat = await this.app.vault.adapter.stat(path);
-				if (stat && stat.mtime === meta.mtime && stat.size === meta.size) {
-					addIcon(iconId, cachedContent);
-					this.registeredPaths.add(path);
-					verifiedPaths.add(path);
-					return true;
-				}
-				this.logger.debug(`Icon changed on disk since last scan, re-reading: ${path}`);
-			} catch {
-				// stat failed (e.g. deleted) - loadIconFromFile below surfaces the ENOENT.
-			}
-		}
-
-		return this.loadIconFromFile(iconId, path, true);
+		return { restoredCount, missingCount };
 	}
 
 	private async loadIconFromFile(iconId: string, iconPath: string, cacheContent = false): Promise<boolean> {
@@ -253,18 +206,16 @@ export class IconLoader {
 	/** Releases in-memory state held by the loader. Called on plugin unload. */
 	dispose(): void {
 		this.registeredPaths.clear();
-		this.lastRestoreVerifiedPaths = null;
-		this.lastRestoreVerifiedAt = null;
 		HelperUtils.clearCaches();
 		this.contentCacheStore.reset();
 	}
 
-	private async processIconsInBatches(svgFiles: IconFile[], iconCache: IconCache, skipVerifyPaths?: ReadonlySet<string>): Promise<ProcessIconResult[]> {
+	private async processIconsInBatches(svgFiles: IconFile[], iconCache: IconCache): Promise<ProcessIconResult[]> {
 		// Process icons in a concurrency pool. stat() and read() are I/O-bound, so
 		// higher concurrency parallelizes filesystem ops without blocking the UI.
 		const results = await runWithConcurrency(
 			svgFiles,
-			icon => this.processIcon(icon, iconCache, skipVerifyPaths),
+			icon => this.processIcon(icon, iconCache),
 			CONFIG.IO_CONCURRENCY
 		);
 
@@ -290,17 +241,18 @@ export class IconLoader {
 		return {newCache: newIconCache, changedCount};
 	}
 
-	private handleLoadIconsError(error: Error, iconsFolderPath: string): void {
+	private handleLoadIconsError(error: unknown, iconsFolderPath: string): void {
 		this.logger.error(`Error scanning icons folder at '${iconsFolderPath}':`, error);
 
-		if (error.message?.includes('no such file or directory')) {
+		const message = error instanceof Error ? error.message : String(error);
+		if (message.includes('no such file or directory')) {
 			this.logger.debug(`Please ensure the '${CONFIG.ICONS_FOLDER}' folder exists in the plugin directory: ${this.scanner.getManifestDir()}/${CONFIG.ICONS_FOLDER}`);
 		}
 	}
 
-	private async processIcon(icon: IconFile, iconCache: IconCache, skipVerifyPaths?: ReadonlySet<string>): Promise<ProcessIconResult | { success: false }> {
+	private async processIcon(icon: IconFile, iconCache: IconCache): Promise<ProcessIconResult | { success: false }> {
 		try {
-			const cacheResult = await this.checkIconCache(icon, iconCache, skipVerifyPaths);
+			const cacheResult = await this.checkIconCache(icon, iconCache);
 			if (cacheResult.useCache && cacheResult.iconId && cacheResult.data) {
 				// Record the reused ID so a colliding new file processed later in
 				// this same pass is detected instead of silently overwriting it.
@@ -348,26 +300,13 @@ export class IconLoader {
 		}
 	}
 
-	private async checkIconCache(icon: IconFile, iconCache: IconCache, skipVerifyPaths?: ReadonlySet<string>): Promise<{
+	private async checkIconCache(icon: IconFile, iconCache: IconCache): Promise<{
 		useCache: boolean;
 		iconId?: string;
 		data?: IconCacheEntry;
 		fileStat?: FileStat;
 	}> {
 		const cachedIcon = iconCache[icon.path] as IconCacheEntry | undefined;
-
-		// restoreIconsFromCache already stat()-verified this exact path (same
-		// mtime/size comparison) moments ago this session - re-doing that I/O
-		// here would just re-confirm the same answer. Only the automatic
-		// post-restore background scan sets this; a user-triggered "Reload
-		// Icons" always does the real stat() below.
-		if (cachedIcon && skipVerifyPaths?.has(icon.path)) {
-			return {
-				useCache: true,
-				iconId: cachedIcon.iconId,
-				data: cachedIcon
-			};
-		}
 
 		let fileStat = icon.stat;
 		if (!fileStat) {

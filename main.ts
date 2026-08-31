@@ -25,43 +25,64 @@ export default class AddCustomIconsPlugin extends Plugin {
 			this.registerCommands();
 			this.addSettingTab(new AddCustomIconsSettingTab(this.app, this));
 
-			// Restore icons from cache synchronously during onload(), not deferred
-			// to onLayoutReady(). Some plugins (e.g. Iconic) snapshot the icon list
+			// Register cached icons during onload(), not deferred to
+			// onLayoutReady(). Some plugins (e.g. Iconic) snapshot the icon list
 			// at module-evaluation time via getIconIds() - if our icons aren't
 			// registered yet by then, they're missing from that snapshot for the
-			// rest of the session, even after a later restart. restoreIconsFromCache
-			// reuses cache.json's pre-normalized content, so this is a fast path
-			// (a stat() + addIcon() per icon), not a full disk read+parse.
+			// rest of the session, even after a later restart.
 			// See: https://github.com/Riffaells/add-custom-icons/issues/3
-			await this.initializeIconsFromCache();
+			//
+			// To keep that off Obsidian's startup path, this pass touches the
+			// disk exactly once (cache.json) and does no per-icon I/O: every
+			// icon is registered from the already-parsed content cache. Reading
+			// icons the cache doesn't cover, and checking the rest against the
+			// filesystem, is the background scan's job below.
+			const needsFullLoad = await this.initializeIconsFromCache();
 
-			// Defer the slower full filesystem scan (detecting added/changed/
-			// deleted icons) until the workspace is ready, so it doesn't block
-			// Obsidian's startup.
+			// Defer the full filesystem scan (detecting added/changed/deleted
+			// icons) until the workspace is ready, so it never blocks startup.
 			this.app.workspace.onLayoutReady(() => {
-				this.scheduleBackgroundIconLoad();
+				this.scheduleBackgroundIconLoad(needsFullLoad);
 			});
 		} catch (error) {
 			this.logger?.error('Failed to load Add Custom Icons plugin:', error);
 		}
 	}
 
-	/** Restores cached icons into Obsidian's registry. Runs during onload(), before layout is ready. */
-	private async initializeIconsFromCache(): Promise<void> {
+	/**
+	 * Registers cached icons into Obsidian's registry. Runs during onload(),
+	 * before layout is ready, so it stays I/O-free apart from reading
+	 * cache.json.
+	 *
+	 * Returns true when the filesystem scan is required for icons to appear at
+	 * all - a first run, an unusable cache, or entries the content cache has no
+	 * SVG for - as opposed to merely being the routine freshness check.
+	 */
+	private async initializeIconsFromCache(): Promise<boolean> {
 		try {
 			this.iconLoader.setIconsPath(this.settings.iconsPathType, this.settings.customIconsPath);
 
-			if (this.iconCache._cacheVersion === CONFIG.CACHE_VERSION) {
-				this.logger.debug(`Loaded icon cache with ${Object.keys(this.iconCache).length - 1} entries`);
-				await this.iconLoader.restoreIconsFromCache(this.iconCache, this.settings.monochromeColors);
-				// Notify other plugins (e.g. Notebook Navigator) that icons are now in Obsidian's registry.
-				window.dispatchEvent(new CustomEvent('add-custom-icons:loaded'));
-			} else {
+			if (this.iconCache._cacheVersion !== CONFIG.CACHE_VERSION) {
 				this.logger.debug('Cache version mismatch or no cache found, will create new cache');
 				this.iconCache = { _cacheVersion: CONFIG.CACHE_VERSION };
+				return true;
 			}
+
+			const cachedEntries = Object.keys(this.iconCache).length - 1;
+			this.logger.debug(`Loaded icon cache with ${cachedEntries} entries`);
+			const { restoredCount, missingCount } = await this.iconLoader.restoreIconsFromCache(
+				this.iconCache,
+				this.settings.monochromeColors
+			);
+			this.loadedIconsCount = restoredCount;
+
+			// Notify other plugins (e.g. Notebook Navigator) that icons are now in Obsidian's registry.
+			window.dispatchEvent(new CustomEvent('add-custom-icons:loaded'));
+
+			return cachedEntries === 0 || missingCount > 0;
 		} catch (error) {
 			this.logger.error('Error initializing icons:', error);
+			return true;
 		}
 	}
 
@@ -127,10 +148,19 @@ export default class AddCustomIconsPlugin extends Plugin {
 		this.logger.debug('Icon Stats:', stats);
 	}
 
-	private scheduleBackgroundIconLoad(): void {
-		if (!this.settings.enableBackgroundScan) {
+	/**
+	 * @param force run even with automatic scanning turned off - set when the
+	 * cache alone couldn't put the icons into the registry (first run, cleared
+	 * cache), where skipping the scan would leave the user with no icons.
+	 */
+	private scheduleBackgroundIconLoad(force = false): void {
+		if (!this.settings.enableBackgroundScan && !force) {
 			this.logger.debug('Background scan disabled in settings, skipping');
 			return;
+		}
+
+		if (force && !this.settings.enableBackgroundScan) {
+			this.logger.debug('Background scan disabled, but icons are not in the cache yet - running once');
 		}
 
 		const runLoad = () => {
@@ -188,12 +218,11 @@ export default class AddCustomIconsPlugin extends Plugin {
 		try {
 			this.iconLoader.setIconsPath(this.settings.iconsPathType, this.settings.customIconsPath);
 
-			// This scan runs shortly after initializeIconsFromCache() restored and
-			// stat()-verified every cached icon, so - as long as that verification
-			// is still recent (IconLoader.MAX_TRUST_WINDOW_MS) - it can trust that
-			// work instead of re-verifying the same paths, and only needs to
-			// discover icons the restore pass didn't already see (new/changed/deleted files).
-			const result = await this.iconLoader.loadIcons(this.iconCache, this.settings.monochromeColors, { trustRecentRestore: true });
+			// The startup pass registered cached icons without touching the
+			// filesystem, so this scan is what actually verifies them: it picks
+			// up icons added, changed, or deleted on disk, and reads any the
+			// content cache had nothing for.
+			const result = await this.iconLoader.loadIcons(this.iconCache, this.settings.monochromeColors);
 			this.iconCache = result.newCache;
 			this.loadedIconsCount = result.loadedCount;
 

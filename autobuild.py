@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Automatic sync script for Obsidian plugin development.
-Watches for changes in build/ and copies files to the plugin folder in Obsidian.
+Watches for build output changes and copies files to the plugin folder in Obsidian.
 """
 
 import shutil
@@ -20,10 +20,12 @@ console = Console()
 class PluginSyncHandler(FileSystemEventHandler):
     def __init__(self, source_dir: Path, obsidian_vault_path: Path, plugin_id: str):
         self.source_dir = source_dir
-        self.build_dir = source_dir / "build"
+        # esbuild writes main.js into the project root, alongside the
+        # manifest.json/styles.css that ship with it.
+        self.build_dir = source_dir
         self.plugin_dir = obsidian_vault_path / ".obsidian" / "plugins" / plugin_id
 
-        # Files to sync (taken from build/)
+        # Files to sync (taken from the project root)
         self.sync_files = [
             "main.js",
             "styles.css",
@@ -65,7 +67,7 @@ class PluginSyncHandler(FileSystemEventHandler):
     def _handle_event(self, src_path: str, icon: str, color: str):
         file_path = Path(src_path)
 
-        # Only care about files inside build/
+        # Only care about files in the project root
         try:
             relative_path = file_path.relative_to(self.build_dir)
         except ValueError:
@@ -87,10 +89,10 @@ class PluginSyncHandler(FileSystemEventHandler):
             console.print(f"   ❌ [red]{relative_path}: {e}[/red]")
 
     def _sync_all(self):
-        """Full sync of all files from build/."""
-        if not self.build_dir.exists():
+        """Full sync of all build output files."""
+        if not (self.build_dir / "main.js").exists():
             console.print(
-                "⚠️  [yellow]build/ directory not found.[/yellow] "
+                "⚠️  [yellow]main.js not found.[/yellow] "
                 "Run [cyan]npm run build[/cyan] or [cyan]npm run dev[/cyan] first."
             )
             return
@@ -113,7 +115,7 @@ class PluginSyncHandler(FileSystemEventHandler):
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Sync Obsidian plugin from build/ to vault"
+        description="Sync Obsidian plugin build output to vault"
     )
     parser.add_argument(
         "--vault", "-v", required=True,

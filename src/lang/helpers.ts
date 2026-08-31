@@ -22,9 +22,13 @@ function getPath(obj: Record<string, unknown>, path: string): string | undefined
     return typeof current === 'string' ? current : undefined;
 }
 
-function interpolate(str: string, params: Record<string, unknown>): string {
-    return str.replace(/\{(\w+)}/g, (match, key) => {
-        const value = params[key as string];
+/** Values interpolated into a translated string - always scalars, so they
+ * stringify predictably (no '[object Object]' leaking into the UI). */
+export type TranslationParams = Record<string, string | number>;
+
+function interpolate(str: string, params: TranslationParams): string {
+    return str.replace(/\{(\w+)}/g, (match: string, key: string) => {
+        const value = params[key];
         if (value === undefined || value === null) {
             return match;
         }
@@ -35,7 +39,7 @@ function interpolate(str: string, params: Record<string, unknown>): string {
 /**
  * Translation helper with support for nested keys (e.g. 'settings.title')
  */
-export function t(path: string, params?: Record<string, unknown>): string {
+export function t(path: string, params?: TranslationParams): string {
     const result = getPath(locale, path) || getPath(en, path) || path;
 
     if (params) {

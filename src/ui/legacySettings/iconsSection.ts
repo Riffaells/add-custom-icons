@@ -46,8 +46,8 @@ export function createIconsSection(ctx: LegacySettingsContext, containerEl: HTML
 						await plugin.saveSettings();
 					});
 
-				new FolderSuggest(app, text, async () => {
-					await plugin.saveSettings();
+				new FolderSuggest(app, text, () => {
+					void plugin.saveSettings();
 				});
 			});
 	}

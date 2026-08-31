@@ -1,11 +1,12 @@
 {
 	"name": "add-custom-icons",
-	"version": "1.2.0",
+	"version": "1.2.1",
 	"description": "Load custom SVG icons from icons folder and restart plugins automatically",
 	"main": "main.js",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
 		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+		"lint": "eslint .",
 		"version": "node version-bump.mjs && git add manifest.json versions.json"
 	},
 	"keywords": [
@@ -17,15 +18,17 @@
 	"author": "Riffaells",
 	"license": "MIT",
 	"devDependencies": {
+		"@eslint/js": "^9.39.5",
 		"@types/node": "^16.11.6",
-		"@typescript-eslint/eslint-plugin": "^8.35.1",
-		"@typescript-eslint/parser": "^8.35.1",
 		"esbuild": "^0.25.11",
-		"eslint": "^8.57.1",
-		"eslint-plugin-obsidianmd": "^0.1.9",
+		"eslint": "^9.39.5",
+		"eslint-plugin-obsidianmd": "^0.4.2",
 		"obsidian": "^1.13.1",
 		"tslib": "2.4.0",
-		"typescript": "^5.7.2",
-		"typescript-eslint": "^8.35.1"
+		"typescript": "^5.9.3",
+		"typescript-eslint": "^8.69.0"
+	},
+	"overrides": {
+		"fast-uri": "^3.1.6"
 	}
 }

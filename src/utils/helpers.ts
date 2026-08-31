@@ -1,6 +1,6 @@
 import { IconFile } from '../types';
 import { generateIconId, resetIdRegistry, registerExistingId, cleanFolderName } from './iconId';
-import { normalizeSvgContent, clearSvgNormalizerCaches } from './svg/svgNormalizer';
+import { normalizeSvgContent, parseSvgElement, clearSvgNormalizerCaches } from './svg/svgNormalizer';
 import { extractSvgColors } from './svg/svgColorExtraction';
 import { parseColorList, isValidColor, clearColorMemo } from './svg/colorMemo';
 
@@ -33,6 +33,11 @@ export class HelperUtils {
 
 	static normalizeSvgContent(rawSvgContent: string, monochromeColors: string): string {
 		return normalizeSvgContent(rawSvgContent, monochromeColors);
+	}
+
+	/** Parses normalized SVG markup into a DOM node, avoiding innerHTML. */
+	static parseSvgElement(svgMarkup: string): SVGElement | null {
+		return parseSvgElement(svgMarkup);
 	}
 
 	/** Extracts fixed fill/stroke colors from an SVG, for the icon-fix dialog. */
