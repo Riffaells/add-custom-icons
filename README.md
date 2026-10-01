@@ -48,6 +48,15 @@ A plugin for Obsidian that loads custom SVG icons from the `icons` folder and au
 3. Use the "Reload custom icons" command for manual reload
 4. Configure automatic restart in plugin settings
 
+### Using with Iconic
+
+Some plugins read Obsidian's icon list once, at the moment they are loaded. [Iconic](https://github.com/gfxholo/iconic) is one of them: an icon missing from that list does not show up in its icon picker and is not drawn at all.
+
+So whether Iconic sees your icons depends on which of the two plugins Obsidian loads first, and that follows the order they were enabled in:
+
+- **Add Custom Icons loads first**: nothing to configure, Iconic picks the icons up when it loads.
+- **Iconic loads first**: turn on **Enable auto restart**, set **Restart target** to *Selected Plugins* and keep `iconic` in the list. Iconic is then reloaded once after startup, and again whenever the icons change.
+
 ## Settings
 
 - **Icons Location**: plugin folder, vault folder (`.obsidian/icons`) or a custom path
