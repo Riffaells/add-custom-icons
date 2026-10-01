@@ -44,6 +44,9 @@ export function parsePluginData(data: Record<string, unknown> | null): Persisted
 	}
 
 	if (!settings.selectedPlugins) settings.selectedPlugins = [];
+	// The list holds plugin IDs, but the default used to be Iconic's display
+	// name, which matches no plugin - and got saved into data.json as is.
+	settings.selectedPlugins = [...new Set(settings.selectedPlugins.map(id => id === 'Iconic' ? 'iconic' : id))];
 	if (!settings.iconsPathType) settings.iconsPathType = 'plugin';
 	if (!settings.customIconsPath) settings.customIconsPath = '';
 	// The legacy branch above can Object.assign an explicit `undefined` over
