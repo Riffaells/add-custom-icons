@@ -30,6 +30,18 @@ export function normalizeSvgContent(rawSvgContent: string, monochromeColors: str
 		return normalizeSvgContentFallback(rawSvgContent, monochromeColors);
 	}
 
+	// width/height are removed below, and on an SVG exported without a viewBox
+	// they are the only thing that says how big the drawing is. Obsidian
+	// renders icons inside its own 0 0 100 100 viewBox, so such an icon would
+	// be drawn unscaled: cropped when larger than 100, shrunk into a corner
+	// when smaller. Carry the size over into a viewBox first.
+	if (!svgEl.hasAttribute('viewBox')) {
+		const viewBox = viewBoxFromSize(svgEl.getAttribute('width'), svgEl.getAttribute('height'));
+		if (viewBox) {
+			svgEl.setAttribute('viewBox', viewBox);
+		}
+	}
+
 	// Remove width/height attributes
 	svgEl.removeAttribute('width');
 	svgEl.removeAttribute('height');
@@ -86,6 +98,23 @@ export function normalizeSvgContent(rawSvgContent: string, monochromeColors: str
 	}
 
 	return svgEl.outerHTML;
+}
+
+/**
+ * Builds a viewBox from the root element's width/height, for SVGs exported
+ * without one. Only plain numbers and px describe user units - anything else
+ * (%, em, ...) says nothing about the drawing's size and is left alone.
+ */
+function viewBoxFromSize(width: string | null, height: string | null): string | null {
+	const w = parseUserUnits(width);
+	const h = parseUserUnits(height);
+	return w && h ? `0 0 ${w} ${h}` : null;
+}
+
+function parseUserUnits(length: string | null): number | null {
+	const match = /^\s*(\d*\.?\d+)(?:px)?\s*$/i.exec(length ?? '');
+	const value = match ? Number(match[1]) : 0;
+	return value > 0 ? value : null;
 }
 
 /**
@@ -238,7 +267,18 @@ function parseCssDeclarations(declText: string): Map<string, string> {
 
 /** Regex-based fallback for malformed SVGs that DOMParser cannot handle */
 function normalizeSvgContentFallback(rawSvgContent: string, monochromeColors: string): string {
+	// Same viewBox rescue as the DOMParser path, read off the root tag's text
+	// before the dimensions are stripped.
+	const rootTag = /<svg\b[^>]*>/i.exec(rawSvgContent)?.[0] ?? '';
+	const viewBox = /\sviewBox\s*=/i.test(rootTag) ? null : viewBoxFromSize(
+		/\swidth\s*=\s*["']([^"']*)["']/i.exec(rootTag)?.[1] ?? null,
+		/\sheight\s*=\s*["']([^"']*)["']/i.exec(rootTag)?.[1] ?? null
+	);
+
 	let svgContent = rawSvgContent.replace(REGEX.SVG_DIMENSIONS, '');
+	if (viewBox) {
+		svgContent = svgContent.replace(/<svg\b/i, `<svg viewBox="${viewBox}"`);
+	}
 
 	// Strip editor cruft (metadata/sodipodi/RDF blocks, comments) the same way
 	// the DOMParser path does, since it can't be relied on to be well-formed here.
