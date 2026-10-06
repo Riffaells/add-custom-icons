@@ -24,6 +24,9 @@ export default class AddCustomIconsPlugin extends Plugin {
 		return this.iconLoader?.getIconCache() ?? {};
 	}
 
+	/** Selected plugins that were already loaded when the cached icons were registered at startup. */
+	private pluginsLoadedBeforeIcons: string[] = [];
+
 	async onload(): Promise<void> {
 		try {
 			await this.loadSettings();
@@ -35,9 +38,15 @@ export default class AddCustomIconsPlugin extends Plugin {
 			// Register cached icons during onload(), not deferred to
 			// onLayoutReady(). Some plugins (e.g. Iconic) snapshot the icon list
 			// at module-evaluation time via getIconIds() - if our icons aren't
-			// registered yet by then, they're missing from that snapshot for the
-			// rest of the session, even after a later restart.
+			// registered yet by then, they're missing from that snapshot until
+			// that plugin's main.js is evaluated again.
 			// See: https://github.com/Riffaells/add-custom-icons/issues/3
+			//
+			// This covers the plugins Obsidian loads after this one. Load order
+			// is not ours to pick (it follows the order plugins were enabled
+			// in), so a plugin loaded earlier took its snapshot before onload()
+			// even started here - those are reloaded once the workspace is
+			// ready, see reloadPluginsLoadedBeforeIcons().
 			//
 			// To keep that off Obsidian's startup path, this pass touches the
 			// disk exactly once (cache.json) and does no per-icon I/O: every
@@ -49,6 +58,7 @@ export default class AddCustomIconsPlugin extends Plugin {
 			// Defer the full filesystem scan (detecting added/changed/deleted
 			// icons) until the workspace is ready, so it never blocks startup.
 			this.app.workspace.onLayoutReady(() => {
+				this.reloadPluginsLoadedBeforeIcons();
 				this.scheduleBackgroundIconLoad(needsFullLoad);
 			});
 		} catch (error) {
@@ -83,6 +93,12 @@ export default class AddCustomIconsPlugin extends Plugin {
 				await this.saveSettings();
 			}
 
+			// Whatever is loaded by now evaluated its main.js while the registry
+			// had none of these icons, so a snapshot taken there is missing them.
+			if (restoredCount > 0) {
+				this.pluginsLoadedBeforeIcons = this.pluginManager.getLoadedPlugins(this.settings.selectedPlugins);
+			}
+
 			// Notify other plugins (e.g. Notebook Navigator) that icons are now in Obsidian's registry.
 			window.dispatchEvent(new CustomEvent('add-custom-icons:loaded'));
 
@@ -107,6 +123,7 @@ export default class AddCustomIconsPlugin extends Plugin {
 		// Release in-memory state so nothing lingers after unload.
 		this.iconLoader?.dispose();
 		this.loadedIconsCount = 0;
+		this.pluginsLoadedBeforeIcons = [];
 	}
 
 	private initializeServices(): void {
@@ -269,6 +286,32 @@ export default class AddCustomIconsPlugin extends Plugin {
 		} finally {
 			this.isLoading = false;
 		}
+	}
+
+	/**
+	 * Reloads the selected plugins that Obsidian loaded before this one. They
+	 * took their icon snapshot while the registry had none of our icons, and
+	 * no scan will report a change that would restart them - so without this
+	 * they miss the custom icons on every startup, however complete the cache.
+	 *
+	 * Only for the 'plugins' restart target: restarting Obsidian from its own
+	 * startup would loop.
+	 */
+	private reloadPluginsLoadedBeforeIcons(): void {
+		const stalePlugins = this.pluginsLoadedBeforeIcons;
+		this.pluginsLoadedBeforeIcons = [];
+
+		if (stalePlugins.length === 0) {
+			return;
+		}
+
+		if (!this.settings.enableAutoRestart || this.settings.restartTarget !== 'plugins') {
+			this.logger.debug(`Loaded before the custom icons, but restarting selected plugins is off: ${stalePlugins.join(', ')}`);
+			return;
+		}
+
+		this.logger.debug(`Reloading plugins that were loaded before the custom icons: ${stalePlugins.join(', ')}`);
+		this.pluginManager.triggerPluginsReload(stalePlugins);
 	}
 
 	private triggerRestart(): void {

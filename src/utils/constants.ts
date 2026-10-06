@@ -22,16 +22,14 @@ export const CONFIG = {
 	RESTORE_YIELD_MS: 16,
 	PLUGIN_RELOAD_DELAYS: {
 		BASE: 500,
-		INCREMENT: 100,
-		CYCLE: 100,
-		SUMMARY: 2000
+		CYCLE: 100
 	}
 } as const;
 
 export const DEFAULT_SETTINGS: AddCustomIconsSettings = {
 	restartTarget: 'none',
 	enableAutoRestart: false,
-	selectedPlugins: ['Iconic'],
+	selectedPlugins: ['iconic'],
 	debugMode: false,
 	monochromeColors: '#000000,#000,black,#ffffff,#fff,white,#1C274C,#1C274D',
 	iconsPathType: 'plugin',
