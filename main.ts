@@ -71,15 +71,15 @@ export default class AddCustomIconsPlugin extends Plugin {
 	 * before layout is ready, so it stays I/O-free apart from reading
 	 * cache.json.
 	 *
-	 * Returns true when the filesystem scan is required for icons to appear at
-	 * all - a first run, an unusable cache, or entries the content cache has no
-	 * SVG for - as opposed to merely being the routine freshness check.
+	 * Returns true when the filesystem scan is required - a first run, an
+	 * unusable cache, entries the content cache has no SVG for, or content from
+	 * an older normalizer - as opposed to merely being the routine freshness check.
 	 */
 	private async initializeIconsFromCache(): Promise<boolean> {
 		try {
 			this.iconLoader.setIconsPath(this.settings.iconsPathType, this.settings.customIconsPath);
 
-			const { restoredCount, missingCount, cachedEntries, migratedFromData } =
+			const { restoredCount, missingCount, cachedEntries, migratedFromData, contentStale } =
 				await this.iconLoader.restoreIconsFromCache(this.settings.monochromeColors, this.legacyCache);
 			this.legacyCache = null;
 			this.loadedIconsCount = restoredCount;
@@ -102,7 +102,9 @@ export default class AddCustomIconsPlugin extends Plugin {
 			// Notify other plugins (e.g. Notebook Navigator) that icons are now in Obsidian's registry.
 			window.dispatchEvent(new CustomEvent('add-custom-icons:loaded'));
 
-			return cachedEntries === 0 || missingCount > 0;
+			// A stale cache registered the icons, but with an older normalizer's output:
+			// the scan has to run once to replace it, even with background scanning off.
+			return cachedEntries === 0 || missingCount > 0 || contentStale;
 		} catch (error) {
 			this.logger.error('Error initializing icons:', error);
 			return true;
@@ -122,6 +124,7 @@ export default class AddCustomIconsPlugin extends Plugin {
 
 		// Release in-memory state so nothing lingers after unload.
 		this.iconLoader?.dispose();
+		this.pluginManager?.dispose();
 		this.loadedIconsCount = 0;
 		this.pluginsLoadedBeforeIcons = [];
 	}

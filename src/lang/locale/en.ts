@@ -152,6 +152,7 @@ export default {
         errorReloading: "Error reloading icons",
         errorRemovingPlugin: "Failed to remove plugin from list",
         restartingObsidian: "Restarting Obsidian...",
+        pluginReloadFailed: "Could not reload plugin \"{id}\" - restart Obsidian to bring it back",
         manualRestart: "Please restart Obsidian manually",
         pluginAdded: "Plugin added to restart list",
         pluginRemoved: "Plugin removed from restart list",

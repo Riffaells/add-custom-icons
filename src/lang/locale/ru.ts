@@ -152,6 +152,7 @@ export default {
         errorReloading: "Ошибка при перезагрузке иконок",
         errorRemovingPlugin: "Не удалось удалить плагин из списка",
         restartingObsidian: "Перезапускаем Obsidian...",
+        pluginReloadFailed: "Не удалось перезагрузить плагин \"{id}\" — перезапустите Obsidian, чтобы вернуть его",
         manualRestart: "Пожалуйста, перезапустите Obsidian вручную",
         pluginAdded: "Плагин добавлен в список перезапуска",
         pluginRemoved: "Плагин удален из списка перезапуска",

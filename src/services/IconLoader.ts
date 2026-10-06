@@ -18,6 +18,8 @@ export class IconLoader {
 	private registeredPaths = new Set<string>();
 	private readonly scanner: IconFileScanner;
 	private readonly cacheStore: IconCacheStore;
+	/** Set by dispose(), so a restore pass still yielding to the event loop stops registering icons for an unloaded plugin. */
+	private disposed = false;
 	/** Wall-clock time of the most recent loadIcons()/restoreIconsFromCache() call, for the debug stats panel. */
 	private lastLoadDurationMs: number | null = null;
 	private lastRestoreDurationMs: number | null = null;
@@ -85,6 +87,8 @@ export class IconLoader {
 			// Reset collision tracker before each full load pass
 			HelperUtils.resetIdRegistry();
 			const results = await this.processIconsInBatches(svgFiles, iconCache);
+			// Every icon that exists was just re-read if the content was stale.
+			this.cacheStore.markContentFresh();
 			const {newCache, changedCount, metaDirty} = this.updateIconCache(results, iconCache);
 
 			// Only hand the store a new map when something actually moved -
@@ -143,6 +147,7 @@ export class IconLoader {
 		this.monochromeColors = monochromeColors;
 		await this.cacheStore.ensureLoaded(monochromeColors);
 		const migratedFromData = this.cacheStore.adoptLegacyCache(legacyCache);
+		const contentStale = this.cacheStore.isContentStale();
 		// Entries normalized under a different color list are unusable; drop
 		// them here so they are re-read by the background scan instead of
 		// registering icons with the wrong colors.
@@ -157,12 +162,14 @@ export class IconLoader {
 		// hold the main thread for the whole pass - this runs inside onload(),
 		// before the workspace paints anything, so that reads as Obsidian
 		// hanging on startup. Yielding periodically (same time-based approach
-		// as the background scan's concurrency pool) keeps the app responsive
-		// without moving this pass off onload() - it still fully resolves
-		// before onload() does, so the ordering other plugins rely on (see the
-		// comment on initializeIconsFromCache) is unaffected.
+		// as the background scan's concurrency pool) keeps the app responsive.
+		// The pass still fully resolves before onload() does, but whatever
+		// Obsidian loads while it yields sees a partly filled registry - the
+		// same snapshot problem as a plugin loaded before this one. Those plugins
+		// are picked up by main.ts afterwards (pluginsLoadedBeforeIcons).
 		let lastYield = performance.now();
 		for (const key in iconCache) {
+			if (this.disposed) break;
 			const cachedIcon = iconCache[key];
 			if (!cachedIcon?.iconId) continue;
 
@@ -183,7 +190,7 @@ export class IconLoader {
 			}
 		}
 
-		return { restoredCount, missingCount, cachedEntries: Object.keys(iconCache).length, migratedFromData };
+		return { restoredCount, missingCount, cachedEntries: Object.keys(iconCache).length, migratedFromData, contentStale };
 	}
 
 	/** The metadata cache as it currently stands, for UI that lists known icons. */
@@ -226,6 +233,7 @@ export class IconLoader {
 
 	/** Releases in-memory state held by the loader. Called on plugin unload. */
 	dispose(): void {
+		this.disposed = true;
 		this.registeredPaths.clear();
 		HelperUtils.clearCaches();
 		this.cacheStore.reset();
@@ -365,7 +373,9 @@ export class IconLoader {
 			fileStat = rawStat ? { mtime: rawStat.mtime, size: rawStat.size } : undefined;
 		}
 
-		if (cachedIcon && fileStat &&
+		// Stale content means the normalizer changed, not the file: mtime/size
+		// match, but the icon still has to be re-read and re-normalized.
+		if (cachedIcon && fileStat && !this.cacheStore.isContentStale() &&
 			cachedIcon.mtime === fileStat.mtime &&
 			cachedIcon.size === fileStat.size) {
 			return {

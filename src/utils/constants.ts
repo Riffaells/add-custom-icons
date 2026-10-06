@@ -2,14 +2,19 @@ import {AddCustomIconsSettings} from '../types';
 
 export const CONFIG = {
 	ICONS_FOLDER: 'icons',
-	/** Plugin-local, never-synced file (not data.json) holding the whole icon
-	 * cache: per-icon mtime/size/iconId plus normalized SVG content. */
+	/** Plugin-local file (not data.json) holding the whole icon cache: per-icon
+	 * mtime/size/iconId plus normalized SVG content. Obsidian Sync leaves it alone, but
+	 * file-level sync tools (Syncthing, Dropbox, git) copy it like any other file. */
 	CONTENT_CACHE_FILE: 'cache.json',
 	SVG_EXTENSION: '.svg',
 	SUPPORTED_EXTENSIONS: ['.svg'],
 	ID_SEPARATOR: '_',
-	/** Bump whenever normalization changes what ends up in the registry, so cached SVG content is rebuilt from disk. */
-	CACHE_VERSION: 4,
+	/** Layout of cache.json itself. A mismatch discards the whole file - bump only when the file's shape changes. */
+	CACHE_VERSION: 3,
+	/** Bump whenever normalization changes what ends up in the registry. Unlike CACHE_VERSION this does NOT
+	 * discard the cache: old content still registers icons at startup (so other plugins see them at once), and the
+	 * background scan then re-reads every icon from disk and replaces it. */
+	CONTENT_VERSION: 2,
 	MAX_SCAN_DEPTH: 20,
 	BACKGROUND_LOAD_DELAY: 200,
 	/** Max wait for requestIdleCallback before it fires anyway, even if the main thread never reports idle. */

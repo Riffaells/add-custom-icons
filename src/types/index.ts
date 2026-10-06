@@ -56,6 +56,8 @@ export interface RestoreResult {
 	cachedEntries: number;
 	/** True when the cache came from an old data.json and that file should be rewritten without it. */
 	migratedFromData: boolean;
+	/** The cached content predates the current normalization: it was registered as a stopgap and every icon must be re-read by the scan. */
+	contentStale: boolean;
 }
 
 export interface ProcessIconResult {
@@ -76,17 +78,20 @@ export interface FileStat {
     size: number;
 }
 
-/**
- * On-disk shape of cache.json - a plugin-local file written directly via the
- * vault adapter (not through loadData/saveData), so normalized SVG content
- * never bloats data.json. `colorsKey` records the monochrome color list the
- * entries were normalized under; a mismatch on load means the entries are
- * stale and must be discarded.
- */
-/** On-disk shape of cache.json. Device-local: never written to data.json,
- * which is synced between devices (see IconCacheStore). */
+/** Shape of cache.json in 1.2.1 and earlier: content only, no metadata and no version. */
+export interface LegacyContentCacheFile {
+	colorsKey: string;
+	entries: Record<string, string>;
+}
+
+/** On-disk shape of cache.json. Kept out of data.json, which sync copies
+ * between devices (see IconCacheStore). `colorsKey` records the monochrome
+ * color list the content was normalized under; a mismatch on load means the
+ * content is stale and must be discarded. */
 export interface IconCacheFile {
 	version: number;
+	/** Normalization the content was produced by (CONFIG.CONTENT_VERSION); absent in files written before it existed. */
+	contentVersion?: number;
 	colorsKey: string;
 	icons: IconMetaCache;
 	content: Record<string, string>;

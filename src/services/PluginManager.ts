@@ -31,6 +31,9 @@ export class PluginManager {
 	private logger: Logger;
 	/** Chains reload requests so two of them never unload/load the same plugin at once. */
 	private reloadQueue: Promise<void> = Promise.resolve();
+	private reloadTimer: number | null = null;
+	/** Set once this plugin unloads - nothing may be reloaded on its behalf after that. */
+	private disposed = false;
 
 	constructor(app: App, manifestId: string, logger: Logger) {
 		this.app = app as ObsidianApp;
@@ -74,9 +77,19 @@ export class PluginManager {
 		}
 
 		this.logger.debug(`Attempting to reload plugins: ${pluginIds.join(', ')}`);
-		window.setTimeout(() => {
+		this.reloadTimer = window.setTimeout(() => {
+			this.reloadTimer = null;
 			this.reloadQueue = this.reloadQueue.then(() => this.reloadPlugins(pluginIds));
 		}, CONFIG.PLUGIN_RELOAD_DELAYS.BASE);
+	}
+
+	/** Cancels a reload that has not started yet and stops any queued one - called when this plugin unloads. */
+	dispose(): void {
+		this.disposed = true;
+		if (this.reloadTimer !== null) {
+			window.clearTimeout(this.reloadTimer);
+			this.reloadTimer = null;
+		}
 	}
 
 	/**
@@ -95,6 +108,7 @@ export class PluginManager {
 		let failedCount = 0;
 
 		for (const pluginId of pluginIds) {
+			if (this.disposed) return;
 			try {
 				if (await this.reloadPlugin(pluginId)) {
 					this.logger.debug(`Plugin ${pluginId} reloaded successfully`);
@@ -132,7 +146,20 @@ export class PluginManager {
 		}
 
 		await plugins.unloadPlugin(pluginId);
-		await plugins.loadPlugin(pluginId);
+		try {
+			await plugins.loadPlugin(pluginId);
+		} catch (error) {
+			// It is unloaded but still listed as enabled - without a second
+			// attempt the user would be left without the plugin until a restart.
+			this.logger.error(`Loading plugin ${pluginId} failed after unloading it, retrying once:`, error);
+			try {
+				await plugins.loadPlugin(pluginId);
+			} catch (retryError) {
+				this.logger.error(`Plugin ${pluginId} could not be brought back:`, retryError);
+				new Notice(t('notices.pluginReloadFailed', { id: pluginId }));
+				return false;
+			}
+		}
 		return true;
 	}
 

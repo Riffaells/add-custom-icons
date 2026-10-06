@@ -1,5 +1,5 @@
 import { App, normalizePath } from 'obsidian';
-import { IconCacheEntry, IconCacheFile, IconMetaCache } from '../../types';
+import { IconCacheEntry, IconCacheFile, IconMetaCache, LegacyContentCacheFile } from '../../types';
 import { CONFIG } from '../../utils/constants';
 import { Logger } from '../../utils/logger';
 
@@ -15,8 +15,17 @@ import { Logger } from '../../utils/logger';
  * different mtime there. Syncing that metadata made every device reject the
  * whole cache, re-read every icon, write its own timestamps back, and bounce
  * the change to the other device - an endless loop of "thousands of icons
- * changed" plus a plugin restart each time. Keeping it in cache.json, which is
- * not synced, makes the cache what it should be: local, disposable state.
+ * changed" plus a plugin restart each time. cache.json is the right home for
+ * it: Obsidian Sync does not copy it. File-level sync tools (Syncthing,
+ * Dropbox, git) still can, so it is gitignored here - but the cache is cheap to
+ * rebuild if one of them does carry it to another machine.
+ *
+ * Two versions guard it. CACHE_VERSION is the file's layout: a mismatch drops
+ * everything. CONTENT_VERSION is the normalizer's output: a mismatch keeps the
+ * old content so icons still register at startup (the moment other plugins
+ * snapshot the registry), flags it stale, and the background scan then re-reads
+ * every icon from disk. Dropping the cache instead would leave the registry
+ * empty at that moment and hide every icon from such plugins.
  *
  * Content entries are trusted only while the store's colors key matches the
  * active monochrome color list - a mismatch means they were normalized under
@@ -31,6 +40,8 @@ export class IconCacheStore {
 	private icons: IconMetaCache = {};
 	private contentCache: Record<string, string> = {};
 	private colorsKey: string | null = null;
+	/** Content was normalized by an older normalizer - usable as a stopgap, but every icon needs re-reading. */
+	private contentStale = false;
 	private dirty = false;
 	private loaded = false;
 
@@ -61,10 +72,23 @@ export class IconCacheStore {
 			// one place a big vault can still show up as a startup stall; logging
 			// both halves here separates "slow disk read" from "slow parse" if a
 			// user reports one.
-			const parsed = JSON.parse(raw) as IconCacheFile;
+			const parsed = JSON.parse(raw) as IconCacheFile | LegacyContentCacheFile;
 			const parseMs = performance.now() - startTime - readMs;
 			this.logger.debug(`cache.json read in ${readMs.toFixed(1)}ms, parsed in ${parseMs.toFixed(1)}ms (${(raw.length / 1024).toFixed(0)}KB)`);
-			if (parsed?.version !== CONFIG.CACHE_VERSION) {
+			if (!('version' in parsed)) {
+				// 1.2.1 and earlier: content only, keyed by path. Its metadata is in
+				// data.json (adoptLegacyCache). Same colors, so it registers icons
+				// at startup; it predates the current normalizer, so it is stale.
+				if (parsed?.colorsKey === monochromeColors && parsed.entries) {
+					this.contentCache = parsed.entries;
+					this.colorsKey = parsed.colorsKey;
+					this.contentStale = true;
+					this.logger.debug(`Adopted ${Object.keys(this.contentCache).length} content entries from the old cache.json`);
+				}
+				return;
+			}
+
+			if (parsed.version !== CONFIG.CACHE_VERSION) {
 				this.logger.debug('Cache file version mismatch, starting fresh');
 				return;
 			}
@@ -73,7 +97,8 @@ export class IconCacheStore {
 			if (parsed.colorsKey === monochromeColors && parsed.content) {
 				this.contentCache = parsed.content;
 				this.colorsKey = parsed.colorsKey;
-				this.logger.debug(`Loaded icon cache with ${Object.keys(this.icons).length} entries`);
+				this.contentStale = parsed.contentVersion !== CONFIG.CONTENT_VERSION;
+				this.logger.debug(`Loaded icon cache with ${Object.keys(this.icons).length} entries${this.contentStale ? ' (content predates the current normalizer)' : ''}`);
 			} else {
 				this.logger.debug('Cached icon content is stale (color list changed), keeping metadata only');
 			}
@@ -104,6 +129,18 @@ export class IconCacheStore {
 		return true;
 	}
 
+	/** True while the loaded content predates the current normalizer, until markContentFresh(). */
+	isContentStale(): boolean {
+		return this.contentStale;
+	}
+
+	/** Call once a full scan has replaced every content entry with current output. */
+	markContentFresh(): void {
+		if (!this.contentStale) return;
+		this.contentStale = false;
+		this.dirty = true;
+	}
+
 	/**
 	 * Discards content normalized under a color list from earlier this session
 	 * (ensureLoaded only touches disk once) - call whenever the requested color
@@ -113,6 +150,7 @@ export class IconCacheStore {
 		if (this.colorsKey !== null && this.colorsKey !== monochromeColors) {
 			this.contentCache = {};
 			this.colorsKey = null;
+			this.contentStale = false;
 		}
 	}
 
@@ -151,6 +189,8 @@ export class IconCacheStore {
 		try {
 			const payload: IconCacheFile = {
 				version: CONFIG.CACHE_VERSION,
+				// Left out while stale, so a write before the scan finishes can't vouch for old content.
+				contentVersion: this.contentStale ? undefined : CONFIG.CONTENT_VERSION,
 				colorsKey: monochromeColors,
 				icons: this.icons,
 				content: this.contentCache,
@@ -169,6 +209,7 @@ export class IconCacheStore {
 		this.icons = {};
 		this.contentCache = {};
 		this.colorsKey = null;
+		this.contentStale = false;
 		this.dirty = false;
 		this.loaded = false;
 	}
