@@ -19,11 +19,16 @@ export interface AddCustomIconsSettings {
 	enableBackgroundScan: boolean;
 }
 
+/** Legacy shape: the icon cache as it used to be stored inside data.json.
+ * Only parsePluginData still reads it, to migrate it into cache.json. */
 export interface IconCache {
 	_cacheVersion: number;
 
 	[path: string]: IconCacheEntry | number;
 }
+
+/** Per-icon metadata keyed by icon path, as held by IconCacheStore. */
+export type IconMetaCache = Record<string, IconCacheEntry>;
 
 export interface IconCacheEntry {
 	mtime: number;
@@ -47,6 +52,10 @@ export interface RestoreResult {
 	restoredCount: number;
 	/** Cached icons with no content in cache.json - they need the background scan to read them from disk. */
 	missingCount: number;
+	/** Entries the metadata cache holds after this pass; 0 means nothing was cached at all. */
+	cachedEntries: number;
+	/** True when the cache came from an old data.json and that file should be rewritten without it. */
+	migratedFromData: boolean;
 }
 
 export interface ProcessIconResult {
@@ -74,7 +83,11 @@ export interface FileStat {
  * entries were normalized under; a mismatch on load means the entries are
  * stale and must be discarded.
  */
-export interface IconContentCacheFile {
+/** On-disk shape of cache.json. Device-local: never written to data.json,
+ * which is synced between devices (see IconCacheStore). */
+export interface IconCacheFile {
+	version: number;
 	colorsKey: string;
-	entries: Record<string, string>;
+	icons: IconMetaCache;
+	content: Record<string, string>;
 }

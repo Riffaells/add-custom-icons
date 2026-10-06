@@ -1,16 +1,15 @@
 import {App, addIcon} from 'obsidian';
-import {IconFile, IconCache, IconCacheEntry, ProcessIconResult, FileStat, RestoreResult} from '../types';
+import {IconFile, IconCache, IconMetaCache, IconCacheEntry, ProcessIconResult, FileStat, RestoreResult} from '../types';
 import {CONFIG} from '../utils/constants';
 import {HelperUtils} from '../utils/helpers';
 import {Logger} from '../utils/logger';
 import {runWithConcurrency} from '../utils/concurrency';
-import {IconContentCacheStore} from './icons/IconContentCacheStore';
+import {IconCacheStore} from './icons/IconCacheStore';
 import {IconFileScanner} from './icons/IconFileScanner';
 
 export class IconLoader {
 	private app: App;
 	private logger: Logger;
-	private iconCache: IconCache;
 	private monochromeColors: string = "";
 	/**
 	 * Tracks paths whose icons are already registered in Obsidian.
@@ -18,7 +17,7 @@ export class IconLoader {
 	 */
 	private registeredPaths = new Set<string>();
 	private readonly scanner: IconFileScanner;
-	private readonly contentCacheStore: IconContentCacheStore;
+	private readonly cacheStore: IconCacheStore;
 	/** Wall-clock time of the most recent loadIcons()/restoreIconsFromCache() call, for the debug stats panel. */
 	private lastLoadDurationMs: number | null = null;
 	private lastRestoreDurationMs: number | null = null;
@@ -27,21 +26,20 @@ export class IconLoader {
 		this.app = app;
 		this.logger = logger;
 		this.scanner = new IconFileScanner(app, manifestDir, logger);
-		this.contentCacheStore = new IconContentCacheStore(app, manifestDir, logger);
+		this.cacheStore = new IconCacheStore(app, manifestDir, logger);
 	}
 
 	setIconsPath(pathType: 'plugin' | 'vault' | 'custom', customPath: string = ''): void {
 		this.scanner.setIconsPath(pathType, customPath);
 	}
 
-	async loadIcons(iconCache: IconCache, monochromeColors: string): Promise<{
+	async loadIcons(monochromeColors: string): Promise<{
 		loadedCount: number;
 		changedCount: number;
-		newCache: IconCache
 	}> {
 		const startTime = performance.now();
 		try {
-			const result = await this.loadIconsInternal(iconCache, monochromeColors);
+			const result = await this.loadIconsInternal(monochromeColors);
 			this.logger.debug(`Icon load finished in ${(performance.now() - startTime).toFixed(1)}ms (${result.loadedCount} icons, ${result.changedCount} changed)`);
 			return result;
 		} finally {
@@ -49,13 +47,12 @@ export class IconLoader {
 		}
 	}
 
-	private async loadIconsInternal(iconCache: IconCache, monochromeColors: string): Promise<{
+	private async loadIconsInternal(monochromeColors: string): Promise<{
 		loadedCount: number;
 		changedCount: number;
-		newCache: IconCache
 	}> {
-		await this.contentCacheStore.ensureLoaded(monochromeColors);
-		this.contentCacheStore.invalidateIfColorsChanged(monochromeColors);
+		await this.cacheStore.ensureLoaded(monochromeColors);
+		this.cacheStore.invalidateIfColorsChanged(monochromeColors);
 
 		// If the monochrome color list changed since the previous pass, icons
 		// already registered were normalized with the old colors - force a full
@@ -63,8 +60,8 @@ export class IconLoader {
 		if (this.monochromeColors !== monochromeColors) {
 			this.registeredPaths.clear();
 		}
-		this.iconCache = iconCache;
 		this.monochromeColors = monochromeColors;
+		const iconCache = this.cacheStore.getIcons();
 		const iconsFolderPath = this.scanner.getIconsFolderPath();
 		try {
 			this.logger.debug('Scanning for icons...');
@@ -82,24 +79,28 @@ export class IconLoader {
 
 			if (svgFiles.length === 0) {
 				this.logger.debug('No SVG icons found (folder may not exist).');
-				return {loadedCount: 0, changedCount: 0, newCache: iconCache};
+				return {loadedCount: 0, changedCount: 0};
 			}
 
 			// Reset collision tracker before each full load pass
 			HelperUtils.resetIdRegistry();
 			const results = await this.processIconsInBatches(svgFiles, iconCache);
-			const {newCache, changedCount} = this.updateIconCache(results);
+			const {newCache, changedCount, metaDirty} = this.updateIconCache(results, iconCache);
+
+			// Only hand the store a new map when something actually moved -
+			// setIcons() marks cache.json dirty, and rewriting a file with
+			// thousands of identical entries on every scan is pure churn.
+			if (metaDirty) this.cacheStore.setIcons(newCache);
 
 			// Drop content-cache entries for icons that no longer exist, so
 			// cache.json doesn't accumulate stale content for deleted files.
 			const validPaths = new Set(results.map(result => result.path));
-			this.contentCacheStore.pruneToPaths(validPaths);
-			await this.contentCacheStore.persistIfDirty(monochromeColors);
+			this.cacheStore.pruneToPaths(validPaths);
+			await this.cacheStore.persistIfDirty(monochromeColors);
 
 			return {
 				loadedCount: svgFiles.length,
-				changedCount,
-				newCache
+				changedCount
 			};
 		} catch (error) {
 			this.handleLoadIconsError(error, iconsFolderPath);
@@ -123,11 +124,14 @@ export class IconLoader {
 	 * content cache had nothing for them - the caller uses it to force the
 	 * background load even when automatic scanning is turned off, so those
 	 * icons still show up.
+	 *
+	 * `legacyCache` is the cache an older version left in data.json; it seeds
+	 * cache.json when this device has none of its own.
 	 */
-	async restoreIconsFromCache(iconCache: IconCache, monochromeColors: string): Promise<RestoreResult> {
+	async restoreIconsFromCache(monochromeColors: string, legacyCache: IconCache | null = null): Promise<RestoreResult> {
 		const startTime = performance.now();
 		try {
-			const result = await this.restoreIconsFromCacheInternal(iconCache, monochromeColors);
+			const result = await this.restoreIconsFromCacheInternal(monochromeColors, legacyCache);
 			this.logger.debug(`Icon restore finished in ${(performance.now() - startTime).toFixed(1)}ms (${result.restoredCount} icons, ${result.missingCount} not cached)`);
 			return result;
 		} finally {
@@ -135,27 +139,34 @@ export class IconLoader {
 		}
 	}
 
-	private async restoreIconsFromCacheInternal(iconCache: IconCache, monochromeColors: string): Promise<RestoreResult> {
+	private async restoreIconsFromCacheInternal(monochromeColors: string, legacyCache: IconCache | null): Promise<RestoreResult> {
 		this.monochromeColors = monochromeColors;
-		this.iconCache = iconCache;
-		await this.contentCacheStore.ensureLoaded(monochromeColors);
+		await this.cacheStore.ensureLoaded(monochromeColors);
+		const migratedFromData = this.cacheStore.adoptLegacyCache(legacyCache);
 		// Entries normalized under a different color list are unusable; drop
 		// them here so they are re-read by the background scan instead of
 		// registering icons with the wrong colors.
-		this.contentCacheStore.invalidateIfColorsChanged(monochromeColors);
+		this.cacheStore.invalidateIfColorsChanged(monochromeColors);
 
+		const iconCache = this.cacheStore.getIcons();
 		let restoredCount = 0;
 		let missingCount = 0;
 
-		// A plain synchronous loop: addIcon() is just a registry write, so
-		// there is no I/O to overlap here and nothing to yield for - chunking
-		// it would only add scheduling overhead to Obsidian's startup.
+		// addIcon() is just a registry write with no I/O of its own, but at
+		// several thousand icons the accumulated synchronous cost is enough to
+		// hold the main thread for the whole pass - this runs inside onload(),
+		// before the workspace paints anything, so that reads as Obsidian
+		// hanging on startup. Yielding periodically (same time-based approach
+		// as the background scan's concurrency pool) keeps the app responsive
+		// without moving this pass off onload() - it still fully resolves
+		// before onload() does, so the ordering other plugins rely on (see the
+		// comment on initializeIconsFromCache) is unaffected.
+		let lastYield = performance.now();
 		for (const key in iconCache) {
-			if (key === '_cacheVersion') continue;
-			const cachedIcon = iconCache[key] as IconCacheEntry;
+			const cachedIcon = iconCache[key];
 			if (!cachedIcon?.iconId) continue;
 
-			const cachedContent = this.contentCacheStore.get(key);
+			const cachedContent = this.cacheStore.getContent(key);
 			if (!cachedContent) {
 				missingCount++;
 				continue;
@@ -164,9 +175,20 @@ export class IconLoader {
 			addIcon(cachedIcon.iconId, cachedContent);
 			this.registeredPaths.add(key);
 			restoredCount++;
+
+			const now = performance.now();
+			if (now - lastYield >= CONFIG.RESTORE_YIELD_MS) {
+				lastYield = now;
+				await new Promise(resolve => window.setTimeout(resolve, 0));
+			}
 		}
 
-		return { restoredCount, missingCount };
+		return { restoredCount, missingCount, cachedEntries: Object.keys(iconCache).length, migratedFromData };
+	}
+
+	/** The metadata cache as it currently stands, for UI that lists known icons. */
+	getIconCache(): IconMetaCache {
+		return this.cacheStore.getIcons();
 	}
 
 	private async loadIconFromFile(iconId: string, iconPath: string, cacheContent = false): Promise<boolean> {
@@ -180,7 +202,7 @@ export class IconLoader {
 			addIcon(iconId, svgContent);
 			this.registeredPaths.add(iconPath);
 			if (cacheContent) {
-				this.contentCacheStore.set(iconPath, svgContent);
+				this.cacheStore.setContent(iconPath, svgContent);
 			}
 			return true;
 		} catch (error) {
@@ -195,9 +217,8 @@ export class IconLoader {
 	}
 
 	getMemoryStats(): { total: number; lastLoadMs: number | null; lastRestoreMs: number | null } {
-		const cacheKeys = Object.keys(this.iconCache || {});
 		return {
-			total: cacheKeys.length > 0 ? cacheKeys.length - 1 : 0, // -1 for _cacheVersion
+			total: Object.keys(this.cacheStore.getIcons()).length,
 			lastLoadMs: this.lastLoadDurationMs,
 			lastRestoreMs: this.lastRestoreDurationMs,
 		};
@@ -207,10 +228,10 @@ export class IconLoader {
 	dispose(): void {
 		this.registeredPaths.clear();
 		HelperUtils.clearCaches();
-		this.contentCacheStore.reset();
+		this.cacheStore.reset();
 	}
 
-	private async processIconsInBatches(svgFiles: IconFile[], iconCache: IconCache): Promise<ProcessIconResult[]> {
+	private async processIconsInBatches(svgFiles: IconFile[], iconCache: IconMetaCache): Promise<ProcessIconResult[]> {
 		// Process icons in a concurrency pool. stat() and read() are I/O-bound, so
 		// higher concurrency parallelizes filesystem ops without blocking the UI.
 		const results = await runWithConcurrency(
@@ -222,12 +243,14 @@ export class IconLoader {
 		return results.filter((result): result is ProcessIconResult => result.success);
 	}
 
-	private updateIconCache(results: ProcessIconResult[]): {
-		newCache: IconCache;
-		changedCount: number
+	private updateIconCache(results: ProcessIconResult[], previousCache: IconMetaCache): {
+		newCache: IconMetaCache;
+		changedCount: number;
+		metaDirty: boolean;
 	} {
-		const newIconCache: IconCache = {_cacheVersion: CONFIG.CACHE_VERSION};
+		const newIconCache: IconMetaCache = {};
 		let changedCount = 0;
+		let metaDirty = false;
 
 		for (const result of results) {
 			if (result?.success) {
@@ -235,10 +258,28 @@ export class IconLoader {
 				if (result.changed) {
 					changedCount++;
 				}
+				const previous = previousCache[result.path];
+				if (!previous || previous.mtime !== result.data.mtime ||
+					previous.size !== result.data.size || previous.iconId !== result.data.iconId) {
+					metaDirty = true;
+				}
 			}
 		}
 
-		return {newCache: newIconCache, changedCount};
+		// Icons deleted from disk are a change too: they linger in Obsidian's
+		// registry until a restart, and their entries have to leave the cache.
+		// Counting them keeps both from being skipped.
+		let removedCount = 0;
+		for (const path in previousCache) {
+			if (!(path in newIconCache)) removedCount++;
+		}
+		if (removedCount > 0) {
+			this.logger.debug(removedCount + ' cached icons no longer exist on disk');
+			changedCount += removedCount;
+			metaDirty = true;
+		}
+
+		return {newCache: newIconCache, changedCount, metaDirty};
 	}
 
 	private handleLoadIconsError(error: unknown, iconsFolderPath: string): void {
@@ -250,7 +291,7 @@ export class IconLoader {
 		}
 	}
 
-	private async processIcon(icon: IconFile, iconCache: IconCache): Promise<ProcessIconResult | { success: false }> {
+	private async processIcon(icon: IconFile, iconCache: IconMetaCache): Promise<ProcessIconResult | { success: false }> {
 		try {
 			const cacheResult = await this.checkIconCache(icon, iconCache);
 			if (cacheResult.useCache && cacheResult.iconId && cacheResult.data) {
@@ -282,13 +323,23 @@ export class IconLoader {
 					this.logger.warn(`Skipping empty or invalid SVG: ${icon.path}`);
 					return {success: false};
 				}
+				// A copy, a sync or a git checkout rewrites mtime without
+				// changing a single byte the icon draws. Re-registering it is
+				// free, but reporting it as changed would restart every plugin
+				// for nothing, so compare against the cached content first. The
+				// entry still goes back with the fresh mtime/size, so the next
+				// scan is a plain cache hit.
+				const previous = iconCache[icon.path];
+				const unchanged = previous?.iconId === processResult.iconId &&
+					this.cacheStore.getContent(icon.path) === processResult.svgContent;
+
 				addIcon(processResult.iconId, processResult.svgContent);
 				this.registeredPaths.add(icon.path);
-				this.contentCacheStore.set(icon.path, processResult.svgContent);
+				this.cacheStore.setContent(icon.path, processResult.svgContent);
 				return {
 					path: icon.path,
 					data: processResult.cacheEntry,
-					changed: true,
+					changed: !unchanged,
 					success: true
 				};
 			}
@@ -300,7 +351,7 @@ export class IconLoader {
 		}
 	}
 
-	private async checkIconCache(icon: IconFile, iconCache: IconCache): Promise<{
+	private async checkIconCache(icon: IconFile, iconCache: IconMetaCache): Promise<{
 		useCache: boolean;
 		iconId?: string;
 		data?: IconCacheEntry;
@@ -337,8 +388,8 @@ export class IconLoader {
 		const rawSvgContent = await this.app.vault.adapter.read(icon.path);
 		const svgContent = HelperUtils.normalizeSvgContent(rawSvgContent, this.monochromeColors);
 
-		// Only metadata is cached here - the SVG content itself lives in
-		// contentCacheStore (cache.json), kept out of data.json.
+		// Metadata only - the SVG content is stored separately by the same
+		// cache store (cache.json). Neither ever goes into data.json.
 		const cacheEntry: IconCacheEntry = {
 			mtime: fileStat.mtime,
 			size: fileStat.size,

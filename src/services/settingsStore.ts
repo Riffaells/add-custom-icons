@@ -1,30 +1,34 @@
 import { AddCustomIconsSettings, IconCache } from '../types';
-import { DEFAULT_SETTINGS, CONFIG } from '../utils/constants';
+import { DEFAULT_SETTINGS } from '../utils/constants';
 
 export interface PersistedPluginData {
 	settings: AddCustomIconsSettings;
-	cache: IconCache;
+	/** Icon cache found in data.json, written by versions that stored it there.
+	 * Current versions keep it in cache.json instead (see IconCacheStore), so
+	 * this is only ever a migration source - null when data.json is clean. */
+	legacyCache: IconCache | null;
 }
 
 /**
- * Parses plugin data.json into settings + icon cache. Handles the current
- * `{ settings, cache }` shape, the legacy shape (cache entries mixed with
- * settings at the top level), and a missing/empty file.
+ * Parses plugin data.json into settings, plus any icon cache left over from an
+ * older version. Handles the current `{ settings }` shape, the `{ settings, cache }`
+ * shape, the oldest shape (cache entries mixed with settings at the top level),
+ * and a missing/empty file.
  */
 export function parsePluginData(data: Record<string, unknown> | null): PersistedPluginData {
 	if (!data) {
 		return {
 			settings: Object.assign({}, DEFAULT_SETTINGS),
-			cache: { _cacheVersion: CONFIG.CACHE_VERSION },
+			legacyCache: null,
 		};
 	}
 
 	let settings: AddCustomIconsSettings;
-	let cache: IconCache;
+	let legacyCache: IconCache | null;
 
 	if (data.settings && typeof data.settings === 'object') {
 		settings = Object.assign({}, DEFAULT_SETTINGS, data.settings as Partial<AddCustomIconsSettings>);
-		cache = (data.cache as IconCache) ?? { _cacheVersion: CONFIG.CACHE_VERSION };
+		legacyCache = (data.cache as IconCache) ?? null;
 	} else if (typeof data._cacheVersion === 'number') {
 		// Legacy format: cache entries mixed with settings at the top level.
 		const { enableAutoRestart, restartTarget, selectedPlugins, debugMode, monochromeColors, iconsPathType, customIconsPath, ...cacheData } = data;
@@ -37,10 +41,10 @@ export function parsePluginData(data: Record<string, unknown> | null): Persisted
 			iconsPathType: (iconsPathType as 'plugin' | 'vault' | 'custom') || 'plugin',
 			customIconsPath: (customIconsPath as string) || ''
 		});
-		cache = cacheData as unknown as IconCache;
+		legacyCache = cacheData as unknown as IconCache;
 	} else {
 		settings = Object.assign({}, DEFAULT_SETTINGS, data);
-		cache = { _cacheVersion: CONFIG.CACHE_VERSION };
+		legacyCache = null;
 	}
 
 	if (!settings.selectedPlugins) settings.selectedPlugins = [];
@@ -53,5 +57,5 @@ export function parsePluginData(data: Record<string, unknown> | null): Persisted
 		settings.monochromeColors = DEFAULT_SETTINGS.monochromeColors;
 	}
 
-	return { settings, cache };
+	return { settings, legacyCache };
 }

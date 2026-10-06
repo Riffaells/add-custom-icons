@@ -1,6 +1,7 @@
 import esbuild from "esbuild";
 import process from "process";
 import { builtinModules } from "module";
+import { copyFileSync, mkdirSync } from "fs";
 
 const banner =
 `/*
@@ -10,6 +11,23 @@ if you want to view the source, please visit the github repository of this plugi
 `;
 
 const prod = (process.argv[2] === "production");
+
+mkdirSync("build", { recursive: true });
+
+// Copy static assets into build/ alongside main.js, so the folder is a
+// self-contained plugin bundle for the release workflow and the dev sync.
+// manifest.json stays in the repo root too - Obsidian's update system and the
+// community-plugin review both read it there.
+const copyAssetsPlugin = {
+	name: "copy-assets",
+	setup(build) {
+		build.onEnd(() => {
+			for (const file of ["manifest.json", "styles.css"]) {
+				copyFileSync(file, `build/${file}`);
+			}
+		});
+	},
+};
 
 const context = await esbuild.context({
 	banner: {
@@ -37,11 +55,9 @@ const context = await esbuild.context({
 	logLevel: "info",
 	sourcemap: prod ? false : "inline",
 	treeShaking: true,
-	// Obsidian expects main.js next to manifest.json and styles.css, both in
-	// the repository root - the community-plugin build check rebuilds the
-	// tagged source and compares its main.js against the released one.
-	outfile: "main.js",
+	outfile: "build/main.js",
 	minify: prod,
+	plugins: [copyAssetsPlugin],
 });
 
 if (prod) {

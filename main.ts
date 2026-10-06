@@ -1,5 +1,5 @@
 import { Plugin, Notice } from 'obsidian';
-import { AddCustomIconsSettings, IconCache, IconCacheEntry } from './src/types';
+import { AddCustomIconsSettings, IconCache, IconMetaCache } from './src/types';
 import { DEFAULT_SETTINGS, CONFIG } from './src/utils/constants';
 import { IconLoader } from './src/services/IconLoader';
 import { PluginManager } from './src/services/PluginManager';
@@ -10,12 +10,19 @@ import { t } from './src/lang/helpers';
 
 export default class AddCustomIconsPlugin extends Plugin {
 	settings: AddCustomIconsSettings = DEFAULT_SETTINGS;
-	iconCache: IconCache = { _cacheVersion: CONFIG.CACHE_VERSION };
 	iconLoader: IconLoader;
 	pluginManager: PluginManager;
 	logger: Logger;
 	isLoading = false;
 	loadedIconsCount = 0;
+	/** Icon cache carried over from a data.json written before the cache moved
+	 * to cache.json; consumed once during startup, then dropped. */
+	private legacyCache: IconCache | null = null;
+
+	/** The icon metadata cache, owned by IconLoader's cache.json store. */
+	get iconCache(): IconMetaCache {
+		return this.iconLoader?.getIconCache() ?? {};
+	}
 
 	async onload(): Promise<void> {
 		try {
@@ -62,19 +69,19 @@ export default class AddCustomIconsPlugin extends Plugin {
 		try {
 			this.iconLoader.setIconsPath(this.settings.iconsPathType, this.settings.customIconsPath);
 
-			if (this.iconCache._cacheVersion !== CONFIG.CACHE_VERSION) {
-				this.logger.debug('Cache version mismatch or no cache found, will create new cache');
-				this.iconCache = { _cacheVersion: CONFIG.CACHE_VERSION };
-				return true;
-			}
-
-			const cachedEntries = Object.keys(this.iconCache).length - 1;
-			this.logger.debug(`Loaded icon cache with ${cachedEntries} entries`);
-			const { restoredCount, missingCount } = await this.iconLoader.restoreIconsFromCache(
-				this.iconCache,
-				this.settings.monochromeColors
-			);
+			const { restoredCount, missingCount, cachedEntries, migratedFromData } =
+				await this.iconLoader.restoreIconsFromCache(this.settings.monochromeColors, this.legacyCache);
+			this.legacyCache = null;
 			this.loadedIconsCount = restoredCount;
+
+			// The cache used to live in data.json, which sync copies between
+			// devices - while mtime/size describe one machine's filesystem, so
+			// every device rejected the other's cache, re-read every icon and
+			// synced its own timestamps back. Now that cache.json owns it,
+			// rewrite data.json without the stale copy.
+			if (migratedFromData) {
+				await this.saveSettings();
+			}
 
 			// Notify other plugins (e.g. Notebook Navigator) that icons are now in Obsidian's registry.
 			window.dispatchEvent(new CustomEvent('add-custom-icons:loaded'));
@@ -91,8 +98,7 @@ export default class AddCustomIconsPlugin extends Plugin {
 		// Remove all registered custom icons from Obsidian's internal registry
 		// to prevent stale icons lingering in memory until app restart.
 		for (const key in this.iconCache) {
-			if (key === '_cacheVersion') continue;
-			const entry = this.iconCache[key] as IconCacheEntry;
+			const entry = this.iconCache[key];
 			if (entry?.iconId) {
 				this.removeCustomIcon(entry.iconId);
 			}
@@ -100,7 +106,6 @@ export default class AddCustomIconsPlugin extends Plugin {
 
 		// Release in-memory state so nothing lingers after unload.
 		this.iconLoader?.dispose();
-		this.iconCache = { _cacheVersion: CONFIG.CACHE_VERSION };
 		this.loadedIconsCount = 0;
 	}
 
@@ -191,19 +196,17 @@ export default class AddCustomIconsPlugin extends Plugin {
 
 	async loadSettings(): Promise<void> {
 		const data = await this.loadData() as Record<string, unknown> | null;
-		const { settings, cache } = parsePluginData(data);
+		const { settings, legacyCache } = parsePluginData(data);
 		this.settings = settings;
-		this.iconCache = cache;
+		this.legacyCache = legacyCache;
 	}
 
 	async saveSettings(): Promise<void> {
-		// Keep cache and settings in separate keys to avoid polluting data.json
-		// with thousands of cache entries mixed together with user settings.
-		const dataToSave = {
-			settings: this.settings,
-			cache: this.iconCache,
-		};
-		await this.saveData(dataToSave);
+		// Settings only. The icon cache lives in cache.json: data.json is synced
+		// between devices, and per-file mtime/size are local to one machine, so
+		// syncing them made every device invalidate the whole cache (see
+		// IconCacheStore).
+		await this.saveData({ settings: this.settings });
 		this.updateDebugMode();
 	}
 
@@ -222,15 +225,13 @@ export default class AddCustomIconsPlugin extends Plugin {
 			// filesystem, so this scan is what actually verifies them: it picks
 			// up icons added, changed, or deleted on disk, and reads any the
 			// content cache had nothing for.
-			const result = await this.iconLoader.loadIcons(this.iconCache, this.settings.monochromeColors);
-			this.iconCache = result.newCache;
+			const result = await this.iconLoader.loadIcons(this.settings.monochromeColors);
 			this.loadedIconsCount = result.loadedCount;
 
 			// Notify other plugins that icons may have changed in Obsidian's registry.
 			window.dispatchEvent(new CustomEvent('add-custom-icons:loaded'));
 
 			if (result.changedCount > 0) {
-				await this.saveSettings();
 				this.triggerRestart();
 			} else {
 				this.logger.debug('No icon changes detected, skipping restart');
@@ -254,13 +255,8 @@ export default class AddCustomIconsPlugin extends Plugin {
 			this.isLoading = true;
 			this.iconLoader.setIconsPath(this.settings.iconsPathType, this.settings.customIconsPath);
 
-			const result = await this.iconLoader.loadIcons(this.iconCache, this.settings.monochromeColors);
-			this.iconCache = result.newCache;
+			const result = await this.iconLoader.loadIcons(this.settings.monochromeColors);
 			this.loadedIconsCount = result.loadedCount;
-
-			if (result.changedCount > 0) {
-				await this.saveSettings();
-			}
 
 			new Notice(t('notices.loadedWithChanges', {
 				count: result.loadedCount,

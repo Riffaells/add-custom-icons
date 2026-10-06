@@ -51,8 +51,7 @@ export class IconsBrowserModal extends Modal {
     }
 
     private filterIcons(filter: string = ''): void {
-        const cache = this.plugin.iconCache;
-        const entries = Object.entries(cache).filter(([path]) => path !== '_cacheVersion');
+        const entries = Object.entries(this.plugin.iconCache);
         
         this.filteredEntries = entries.filter((item): item is [string, IconCacheEntry] => {
             const [path, entry] = item;
